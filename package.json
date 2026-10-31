@@ -3,19 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Browser-safe Level 1 API contracts and synthetic fixtures; no application server.",
+  "description": "Shared Level 1 contracts and a local regulatory ingestion backend.",
   "scripts": {
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:contracts": "npm test",
+    "test:contracts": "node --import tsx --test tests/contracts.test.ts",
+    "test:backend": "node --import tsx --test tests/backend.test.ts",
+    "backend:migrate": "node --env-file-if-exists=.env --import tsx scripts/backend.ts migrate",
+    "backend:seed": "node --env-file-if-exists=.env --import tsx scripts/backend.ts seed",
+    "backend:start": "node --env-file-if-exists=.env --import tsx scripts/backend.ts serve",
+    "backend:worker": "node --env-file-if-exists=.env --import tsx scripts/backend.ts worker",
+    "backend:worker-once": "node --env-file-if-exists=.env --import tsx scripts/backend.ts worker-once",
+    "verify:real-ingestion": "node --import tsx scripts/verify-real-ingestion.ts",
     "validate:fixtures": "node --import tsx scripts/validate-fixtures.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.browser.json",
     "check": "npm run typecheck && npm run validate:fixtures && npm test"
   },
-  "dependencies": { "zod": "4.6.7" },
+  "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
+    "cheerio": "1.1.2",
+    "fflate": "0.8.2",
+    "pdfjs-dist": "5.4.296",
+    "zod": "4.6.7"
+  },
   "devDependencies": {
     "@types/node": "22.20.1",
     "tsx": "4.23.1",
     "typescript": "5.9.3"
   },
-  "engines": { "node": ">=22.0.0" }
+  "engines": {
+    "node": ">=22.13.0"
+  }
 }
