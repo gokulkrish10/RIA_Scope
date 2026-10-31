@@ -1,0 +1,21 @@
+{
+  "name": "regulatory-change-impact-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-safe Level 1 API contracts and synthetic fixtures; no application server.",
+  "scripts": {
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:contracts": "npm test",
+    "validate:fixtures": "node --import tsx scripts/validate-fixtures.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.browser.json",
+    "check": "npm run typecheck && npm run validate:fixtures && npm test"
+  },
+  "dependencies": { "zod": "4.6.7" },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  },
+  "engines": { "node": ">=22.0.0" }
+}
