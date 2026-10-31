@@ -1,6 +1,6 @@
 # Regulatory Change Impact Agent — Level 1 contracts
 
-This repository contains shared TypeScript/Zod contracts, synthetic fixtures, and a local SQLite backend with monitoring, document ingestion, cited Bedrock extraction and historical comparison. Frontend work is owned by Sethu.
+This repository contains shared TypeScript/Zod contracts, synthetic fixtures, and a local SQLite backend with monitoring, document ingestion, cited Bedrock extraction and historical comparison. Sethu’s Level 1 frontend is integrated on a separate local branch.
 
 - [API contract](docs/API_CONTRACT.md): wire formats, field/state rules, endpoint registry and processing semantics.
 - [Sethu integration guide](docs/SETHU_INTEGRATION.md): imports, examples, implementation status and handoff.
@@ -18,3 +18,5 @@ npm run check
 ```
 
 Fixtures are invented demonstration content, not regulatory advice or verified source configurations.
+
+See [Sethu frontend handoff](docs/SETHU_FRONTEND_HANDOFF.md) and the integration verification guide for the combined application.

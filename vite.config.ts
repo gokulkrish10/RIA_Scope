@@ -1,0 +1,8 @@
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    host: '127.0.0.1',
+    proxy: { '/api': { target: process.env.RIA_API_ORIGIN ?? 'http://127.0.0.1:3000', changeOrigin: true } },
+  },
+});
