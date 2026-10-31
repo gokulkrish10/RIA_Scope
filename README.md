@@ -1,5 +1,7 @@
 # Regulatory Change Impact Agent — Level 1 contracts
 
+See [REAL_SOURCE_REPAIR.md](docs/REAL_SOURCE_REPAIR.md) for the local real-source repair, approved monitored HTML contract 1.1.0, diagnostics and historical RBI verification.
+
 This repository contains shared TypeScript/Zod contracts, synthetic fixtures, and a local SQLite backend with monitoring, document ingestion, cited Bedrock extraction and historical comparison. Sethu’s Level 1 frontend is integrated on a separate local branch.
 
 - [API contract](docs/API_CONTRACT.md): wire formats, field/state rules, endpoint registry and processing semantics.
@@ -7,7 +9,7 @@ This repository contains shared TypeScript/Zod contracts, synthetic fixtures, an
 - [Scope and decisions](docs/CONTRACT_DECISIONS.md): inspected baseline, Level 1 traceability and coordination decisions.
 - [Backend ingestion checkpoint](docs/BACKEND_INGESTION.md): preserved ingestion foundation and real-source verification.
 - [Analysis integration](docs/ANALYSIS_INTEGRATION.md): current endpoints, Bedrock setup, polling, predecessor uploads, review controls, verification and remaining gaps.
-- [Analysis coordination notes](docs/ANALYSIS_CONTRACT_PROPOSALS.md): proposed future contract additions; existing shared schemas remain unchanged.
+- [Analysis coordination notes](docs/ANALYSIS_CONTRACT_PROPOSALS.md): proposed future contract additions; the approved monitored HTML extension is documented in the repair guide.
 - Source of truth: `src/shared/contracts/index.ts` and its exported schemas; public types are inferred from those schemas.
 
 Use Node 22.13+ and npm:

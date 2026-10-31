@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const CONTRACT_VERSION = '1.0.0' as const;
+export const CONTRACT_VERSION = '1.1.0' as const;
 export const IdSchema = z.uuid().regex(/^[0-9a-f-]+$/, 'Use lowercase UUIDs');
 export const NonEmptyTextSchema = z.string().min(1).refine(v => v.trim().length > 0, 'Must not be blank');
 export const DateOnlySchema = z.iso.date();

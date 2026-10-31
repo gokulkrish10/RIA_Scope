@@ -1,5 +1,7 @@
 # Analysis integration checkpoint
 
+> Repair update: [REAL_SOURCE_REPAIR.md](REAL_SOURCE_REPAIR.md) records the approved monitored-HTML contract extension, source diagnostics and real RBI historical verification. Statements below describe the earlier checkpoint.
+
 > Integration update: read [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for the current combined application, authorization, startup and verification. Earlier implementation-status claims below describe the named input checkpoint. Direct API reads now require the trusted server token; browser access goes through the authenticated local gateway.
 
 Branch: `feature/gokul-backend`. Shared foundation: `306f0c94998a5c14717f5abccf319b08c20c8f3c`. Preserved text-ingestion checkpoint: `980b469ae0458096672deb4e76fef495c19f0e15` (local only). This guide supersedes earlier implementation-status lists, not the wire specification in [API_CONTRACT.md](API_CONTRACT.md).

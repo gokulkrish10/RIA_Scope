@@ -1,5 +1,7 @@
 # Sethu integration guide
 
+> Repair update: [REAL_SOURCE_REPAIR.md](REAL_SOURCE_REPAIR.md) records the approved monitored-HTML contract extension, source diagnostics and real RBI historical verification. Statements below describe the earlier checkpoint.
+
 > Integration update: read [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for the current combined application, authorization, startup and verification. Earlier implementation-status claims below describe the named input checkpoint. Direct API reads now require the trusted server token; browser access goes through the authenticated local gateway.
 
 The shared contract is ready for independent frontend/backend work. **No HTTP endpoint is implemented in this checkout.** Use validated fixtures for screens until the backend implements the matching operation in `API_CONTRACT`.

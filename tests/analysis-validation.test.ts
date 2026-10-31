@@ -10,6 +10,7 @@ import { citationTransport } from '../src/backend/analysis/model-citations.js';
 import { z } from 'zod';
 import { ModelExtractionSchema } from '../src/backend/analysis/schemas.js';
 import { AnalysisEngine } from '../src/backend/analysis/engine.js';
+import { explicitClauseScope } from '../src/backend/analysis/clause-scope.js';
 import type { ModelExtraction } from '../src/backend/analysis/schemas.js';
 
 const text = 'Consultation. Proposed: banks shall retain records. Refer to CBK/2020/1 issued by Central Bank of Kenya.';
@@ -60,6 +61,35 @@ for (const change of [...changeFixtures, shortenedDeadlineFixture]) {
     assert.equal(diff.filter(d => d.kind !== 'removed').map(d => d.text).join(''), change.after.excerpt);
   });
 }
+test('different transition/commencement dates do not establish a deadline extension', () => {
+  const template = changeFixtures.find(c => c.classification === 'deadlineChanged')!;
+  assert.ok(template.before);
+  const before = { ...template.before, excerpt: 'Existing loans must comply by November 30, 2022.' };
+  const after = { ...template.after, excerpt: 'New loans sanctioned on or after October 1, 2024 must comply.' };
+  const prior: VersionText = { publicationId: fixtureIds.predecessor, documentId: before.documentId, versionId: before.versionId, segments: [{ locator: before.locator, pageNumber: before.pageNumber ?? null, text: before.excerpt }] };
+  const next: VersionText = { publicationId: fixtureIds.publication, documentId: after.documentId, versionId: after.versionId, segments: [{ locator: after.locator, pageNumber: after.pageNumber ?? null, text: after.excerpt }] };
+  assert.throws(() => validateComparison({ evidenceComplete: true, unresolvedReason: null, changes: [{ ...template, before, after, previousDeadline: '2022-11-30', updatedDeadline: '2024-10-01' }] }, next, prior), /same deadline/);
+});
+test('similar durations do not justify pairing cooling-off duties with offer validity', () => {
+  const template = changeFixtures.find(c => c.classification === 'modifiedObligation')!;
+  assert.ok(template.before);
+  const before = { ...template.before, excerpt: 'The cooling-off period must be at least three days.' };
+  const after = { ...template.after, excerpt: 'The offer has a validity period of three working days.' };
+  const prior: VersionText = { publicationId: fixtureIds.predecessor, documentId: before.documentId, versionId: before.versionId, segments: [{ locator: before.locator, pageNumber: before.pageNumber ?? null, text: before.excerpt }] };
+  const next: VersionText = { publicationId: fixtureIds.publication, documentId: after.documentId, versionId: after.versionId, segments: [{ locator: after.locator, pageNumber: after.pageNumber ?? null, text: after.excerpt }] };
+  assert.throws(() => validateComparison({ evidenceComplete: true, unresolvedReason: null, changes: [{ ...template, before, after }] }, next, prior), /different obligations/);
+});
+test('explicit partial amendments select named clauses and their source introduction, never similar duties', () => {
+  const prior = { ...current, segments: segmentPages([{ pageNumber: null, text: '1. Retain records.' }, { pageNumber: null, text: '2.1. Report annual figures.' }, { pageNumber: null, text: '3. Unrelated cooling-off period.' }]) };
+  const next = { ...current, segments: segmentPages([{ pageNumber: null, text: 'The following provisions are repealed.' }, { pageNumber: null, text: 'OLD/1 | Paragraphs 1, 2.1 of Synthetic Prior Circular' }, { pageNumber: null, text: 'A different offer validity period applies.' }]) };
+  const context = { previousPublication: { title: 'Synthetic Prior Circular' }, supportedRelationships: [{ referenceNumber: 'OLD/1', evidence: [] }] };
+  const scope = explicitClauseScope(next, prior, context);
+  assert.deepEqual(scope.scope?.predecessorClauseNumbers, ['1', '2.1']);
+  assert.equal(scope.current.segments.length, 2); assert.equal(scope.previous!.segments.length, 2);
+  assert.doesNotMatch(scope.current.segments.map(s => s.text).join(' '), /validity/);
+  assert.throws(() => explicitClauseScope(next, { ...prior, segments: prior.segments.slice(0, 1) }, context), /clauses are absent/);
+  assert.throws(() => explicitClauseScope({ ...next, segments: segmentPages([{ pageNumber: null, text: 'OLD/1 Paragraphs 1-9 are repealed.' }]) }, prior, context), /range/);
+});
 test('missing comparison evidence is unresolved, never noMaterialChange', () => {
   assert.throws(() => validateComparison({ evidenceComplete: false, unresolvedReason: 'No predecessor clause found.', changes: [] }, current, null), /unresolved/);
   assert.throws(() => validateComparison({ evidenceComplete: true, unresolvedReason: null, changes: [changeFixtures[3]] }, current, null));

@@ -10,6 +10,7 @@ import { AnalysisService } from '../src/backend/analysis/service.js';
 import { AnalysisEngine } from '../src/backend/analysis/engine.js';
 import { BedrockModel } from '../src/backend/analysis/bedrock.js';
 import { IdSchema } from '../src/shared/contracts/index.js';
+import { rbiAdapter, rbiSource, RBI_HISTORICAL_OPTIONS } from '../src/backend/adapters/rbi.js';
 
 process.umask(0o077);
 const mode = process.argv[2] ?? 'serve';
@@ -21,8 +22,11 @@ const storage = new OriginalStorage(options.storagePath);
 const analysis = new AnalysisService(repository, new AnalysisEngine(new BedrockModel()));
 const autoAnalysis = process.env.RIA_ANALYSIS_ENABLED !== 'false';
 if (mode === 'migrate' || mode === 'seed') {
-  if (mode === 'seed') repository.seedSource(cbkSource(repository.now()), cbkAdapter.key, CBK_CHECKPOINT_OPTIONS);
-  console.log(mode === 'seed' ? 'Official CBK source seeded (scoped to the LIBOR guidance for this checkpoint).' : 'Database migrations applied.');
+  if (mode === 'seed') {
+    repository.seedSource(cbkSource(repository.now()), cbkAdapter.key, CBK_CHECKPOINT_OPTIONS);
+    repository.seedSource(rbiSource(repository.now()), rbiAdapter.key, RBI_HISTORICAL_OPTIONS);
+  }
+  console.log(mode === 'seed' ? 'CBK LIBOR checkpoint and RBI selected historical notifications seeded; neither scope claims full regional discovery.' : 'Database migrations applied.');
   db.close();
 } else if (mode === 'analyze') {
   console.log(JSON.stringify(analysis.requestAnalysis(IdSchema.parse(process.argv[3]))));

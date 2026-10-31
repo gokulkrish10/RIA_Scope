@@ -27,7 +27,7 @@ export function bedrockSettings(env: NodeJS.ProcessEnv = process.env, now = Date
   };
 }
 export class BedrockModel implements AnalysisModel {
-  get identity() { return `bedrock:${process.env.AWS_REGION ?? 'unconfigured'}:${process.env.BEDROCK_MODEL_ID ?? 'unconfigured'}:analysis-v3`; }
+  get identity() { return `bedrock:${process.env.AWS_REGION ?? 'unconfigured'}:${process.env.BEDROCK_MODEL_ID ?? 'unconfigured'}:analysis-v4`; }
   async generate(system: string, payload: unknown, schema: z.ZodType, signal: AbortSignal): Promise<unknown> {
     const options = bedrockSettings();
     const citations = citationTransport(payload, z.toJSONSchema(schema));

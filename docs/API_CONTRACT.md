@@ -1,6 +1,10 @@
 # Regulatory Change Impact Agent — Level 1 API contract
 
-Contract version: **1.0.0** (`CONTRACT_VERSION`). These schemas originated in the shared foundation. The endpoints are now implemented locally; see [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for verified coverage and limitations. Direct reads and writes require the trusted server bearer token; browsers authenticate to the local gateway, which injects that token server-side. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
+Contract version: **1.1.0** (`CONTRACT_VERSION`). These schemas originated in the shared foundation. The endpoints are now implemented locally; see [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for verified coverage and limitations. Direct reads and writes require the trusted server bearer token; browsers authenticate to the local gateway, which injects that token server-side. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
+
+## Approved monitored HTML extension (1.1.0)
+
+`DocumentVersion.mediaType` additionally accepts `text/html` for monitored official regulatory bodies. PDF/DOCX/text upload descriptors remain unchanged and reject HTML. Import the updated shared schemas in both consumers. HTML evidence uses source body/section/anchor locators without a page number. Fields, endpoints and status enums are unchanged. See [REAL_SOURCE_REPAIR.md](REAL_SOURCE_REPAIR.md) for routing, original preservation, limitations and live evidence.
 
 ## Wire conventions
 

@@ -86,11 +86,12 @@ export class AnalysisService {
       if (prior.publication_id === publicationId) throw new BackendError('conflict', 'A publication cannot be its own predecessor.', 409);
     }
     if (this.db.get("SELECT id FROM analysis_jobs WHERE version_id=? AND kind='comparison' AND state IN ('queued','running')", current.id)) throw new BackendError('conflict', 'A comparison is already active for this version.', 409);
-    const requestJson = JSON.stringify({ ...request, modelIdentity: this.engine.model.identity });
+    const versionedRequest = { ...request, modelIdentity: this.engine.model.identity, comparisonRevision: this.engine.comparisonRevision };
+    const requestJson = JSON.stringify(versionedRequest);
     const priorSuccess = this.db.get<{ job_id: string; id: string }>("SELECT c.id,c.job_id FROM comparisons c JOIN analysis_jobs j ON j.id=c.job_id WHERE c.current_version_id=? AND j.request_json=? AND j.state='succeeded' ORDER BY c.created_at DESC,c.rowid DESC LIMIT 1", current.id, requestJson);
     if (priorSuccess) return { jobId: priorSuccess.job_id, comparisonId: priorSuccess.id, publicationId, state: 'queued' as const };
     const id = randomUUID();
-    const jobId = this.enqueue('comparison', current.id, { ...request, modelIdentity: this.engine.model.identity });
+    const jobId = this.enqueue('comparison', current.id, versionedRequest);
     const comparison = ComparisonSchema.parse({ id, publicationId, currentDocumentId: (JSON.parse(current.metadata_json) as { documentId: string }).documentId, currentVersionId: current.id, predecessorPublicationId: null, predecessorDocumentId: null, predecessorVersionId: null, createdAt: this.repository.now(), state: 'queued', completedAt: null, changes: [], issue: null });
     this.db.run('INSERT INTO comparisons(id,job_id,publication_id,current_version_id,predecessor_version_id,result_json,created_at) VALUES (?,?,?,?,?,?,?)', id, jobId, publicationId, current.id, request.predecessorVersionId, JSON.stringify(comparison), comparison.createdAt);
     this.resetReview(publicationId);
@@ -160,7 +161,7 @@ export class AnalysisService {
     });
     const status = result.documentStatus ?? 'unknown';
     const value = {
-      summary: `Document status: ${metadata.kind === 'consultation' ? 'consultation (proposed requirements)' : status}. Structured findings are awaiting human review.`,
+      summary: `${version.segments.some(s => /status watermark asset|(?:circular|document) has been (?:repealed|withdrawn|superseded)/i.test(s.text)) ? 'Historical analysis: source carries a later withdrawal/repeal notice or watermark; current applicability is not established. ' : ''}Document status: ${metadata.kind === 'consultation' ? 'consultation (proposed requirements)' : status}. Structured findings are awaiting human review.`,
       businessAreas: [...new Set([...result.businessAreas, ...result.obligations.flatMap(o => o.businessAreas)])],
       obligations: publicObligations(result, version, metadata.kind === 'consultation'), references,
       relationshipState: relationshipState(references), effectiveDate: result.effectiveDate,
@@ -250,7 +251,7 @@ export class AnalysisService {
     if (!target && !extracted.obligations.length) throw new BackendError('comparisonFailed', 'No supported obligations or predecessor clauses are available; comparison remains unresolved.', 422);
     const previous = target ? this.text(target) : null;
     if (target) await this.ensure(target, job, signal);
-    const changes = await this.engine.compare(current, previous, { currentPublication: this.rawPublication(current.publicationId), previousPublication: previous ? this.rawPublication(previous.publicationId) : null }, signal);
+    const changes = await this.engine.compare(current, previous, { currentPublication: this.rawPublication(current.publicationId), previousPublication: previous ? this.rawPublication(previous.publicationId) : null, supportedRelationships: required.filter(r => r.resolution === 'resolved' && r.targetVersionId === target), review: 'Historical comparison pending human review; unrelated predecessors may remain unresolved.' }, signal);
     this.finishComparison(job, ComparisonSchema.parse({ ...base, state: 'succeeded', completedAt: this.repository.now(), changes, issue: null, predecessorPublicationId: previous?.publicationId ?? null, predecessorDocumentId: previous?.documentId ?? null, predecessorVersionId: previous?.versionId ?? null }));
   }
   async runOne(): Promise<boolean> {

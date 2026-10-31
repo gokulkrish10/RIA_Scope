@@ -8,7 +8,7 @@ import {
 
 export const UPLOAD_LIMITS = { maxFileBytes: 20 * 1024 * 1024, maxMetadataBytes: 16 * 1024, maxRequestBytes: 21 * 1024 * 1024, maxFiles: 1 } as const;
 export const DocumentMediaTypeSchema = z.enum([
-  'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain',
+  'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/html',
 ]);
 export const IngestionMethodSchema = z.enum(['monitor', 'upload']);
 export const DocumentVersionSchema = z.strictObject({
@@ -137,7 +137,7 @@ export const UploadMetadataSchema = z.strictObject({
 // Metadata-only validation; adapters must independently inspect actual bytes and MIME signatures.
 export const UploadFileDescriptorSchema = z.strictObject({
   fileName: DocumentVersionSchema.shape.fileName,
-  mediaType: DocumentMediaTypeSchema,
+  mediaType: DocumentMediaTypeSchema.exclude(['text/html']),
   sizeBytes: z.number().int().min(1).max(UPLOAD_LIMITS.maxFileBytes),
 }).refine(v => {
   const extensions = { 'application/pdf': '.pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx', 'text/plain': '.txt' };

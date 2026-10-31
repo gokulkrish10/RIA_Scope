@@ -5,6 +5,9 @@ import { extractText } from './extract.js';
 import { OriginalStorage } from './storage.js';
 import { Repository, type JobRow, type PreparedDocument } from './repository.js';
 import { UPLOAD_LIMITS, type ErrorInfo } from '../shared/contracts/index.js';
+import { downloadDiagnostic, fileSignature } from './download-diagnostics.js';
+import { routeDocument } from './document-routing.js';
+import { officialDocumentLinks } from './html-body.mjs';
 
 export class Worker {
   constructor(
@@ -64,19 +67,31 @@ export class Worker {
         const prepared: PreparedDocument[] = [];
         for (const candidate of candidates) {
           this.repository.progress(job, 'downloading', { sourceId: source.config.id, index: prepared.length + 1, total: candidates.length });
-          const download = await fetcher.get(candidate.downloadUrl, UPLOAD_LIMITS.maxFileBytes, signal);
+          let download = await fetcher.get(candidate.downloadUrl, UPLOAD_LIMITS.maxFileBytes, signal);
           if (!download.bytes.length || download.bytes.length > UPLOAD_LIMITS.maxFileBytes) throw new BackendError('sourceUnavailable', 'Downloaded file violates the byte limit.', 500);
-          const expected = candidate.mediaType;
-          if (download.contentType !== expected && download.contentType !== 'application/octet-stream') throw new BackendError('sourceUnavailable', 'Downloaded file does not match the declared document format.', 500);
-          if (expected === 'application/pdf' && download.bytes.subarray(0, 5).toString() !== '%PDF-') throw new BackendError('sourceUnavailable', 'Source returned a non-PDF document.', 500);
-          const stored = await this.storage.put(download.bytes);
-          prepared.push({ candidate, ...stored, size: download.bytes.length });
+          let stored = await this.storage.put(download.bytes);
+          this.repository.progress(job, 'downloadDiagnostic', { ...downloadDiagnostic(download.httpStatus ?? 200, download.finalUrl, download.contentType, download.bytes), originalHash: stored.hash });
+          let routed;
+          try { routed = routeDocument(download, candidate); }
+          catch (error) {
+            const links = fileSignature(download.bytes) === 'html' ? officialDocumentLinks(download.bytes.toString('utf8'), download.finalUrl, adapter.allowedHosts) : [];
+            // Exactly one explicitly advertised official document; ambiguous landing pages fail closed.
+            if (links.length !== 1) {
+              if (error instanceof BackendError) error.diagnostic = { ...downloadDiagnostic(download.httpStatus ?? 200, download.finalUrl, download.contentType, download.bytes), extractionError: error.message };
+              throw error;
+            }
+            download = await fetcher.get(links[0]!, UPLOAD_LIMITS.maxFileBytes, signal);
+            stored = await this.storage.put(download.bytes);
+            this.repository.progress(job, 'downloadDiagnostic', { ...downloadDiagnostic(download.httpStatus ?? 200, download.finalUrl, download.contentType, download.bytes), originalHash: stored.hash });
+            routed = routeDocument(download, { ...candidate, downloadUrl: download.finalUrl });
+          }
+          prepared.push({ candidate: routed.candidate, ...stored, hash: routed.contentHash ?? stored.hash, size: download.bytes.length });
         }
         this.repository.commitSource(job, source, prepared);
       } catch (error) {
         if (error instanceof LeaseLostError) throw error;
         const failure = safeFailure(error, 'sourceUnavailable');
-        this.repository.progress(job, 'sourceError', { sourceId: source.config.id, error: failure });
+        this.repository.progress(job, 'sourceError', { sourceId: source.config.id, error: failure, ...(error instanceof BackendError && error.diagnostic ? { diagnostic: error.diagnostic } : {}) });
         if (failure.retryable && job.attempts < job.max_attempts) retry = failure;
         else this.repository.failSource(job, source.config.id, failure);
       }
@@ -89,7 +104,12 @@ export class Worker {
     this.repository.startExtraction(job);
     await this.storage.read(version.original_key); // Verify the stored bytes before parsing.
     const mediaType = (JSON.parse(version.metadata_json) as { mediaType: string }).mediaType;
-    const extracted = await extractText(this.storage.path(version.original_key), mediaType, signal);
+    let extracted;
+    try { extracted = await extractText(this.storage.path(version.original_key), mediaType, signal); }
+    catch (error) {
+      this.repository.progress(job, 'extractionDiagnostic', { versionId: version.id, originalHash: version.original_key, extractionError: safeFailure(error, 'extractionFailed').message });
+      throw error;
+    }
     this.repository.completeExtraction(job, extracted, null);
     this.afterTextExtraction?.(version.id);
   }

@@ -65,6 +65,24 @@ async function setup() {
   async function drain() { for (let i = 0; i < 20; i++) if (!await analysis.runOne()) return; throw new Error('Analysis queue did not drain'); }
   return { db, repository, analysis, api, model, worker, call, upload, drain, calls, source, cleanup: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
+test('comparison prompt revision invalidates successful-result cache without duplicating source versions', async () => {
+  const h = await setup();
+  try {
+    const prior = await h.upload(oldText, 'SYNTH/2020/1'), current = await h.upload(newText, 'SYNTH/2026/2');
+    const request = { currentVersionId: current.versionId, predecessorVersionId: prior.versionId };
+    const first = h.analysis.requestComparison(current.publicationId, request); await h.drain();
+    assert.equal(h.analysis.comparison(first.comparisonId).state, 'succeeded');
+    const engine = new AnalysisEngine(h.model);
+    Object.defineProperty(engine, 'comparisonRevision', { get: () => 'synthetic-revised-instructions' });
+    const updated = new AnalysisService(h.repository, engine, 0);
+    const second = updated.requestComparison(current.publicationId, request);
+    assert.notEqual(second.comparisonId, first.comparisonId);
+    while (await updated.runOne()) { /* bounded synthetic jobs */ }
+    assert.equal(updated.comparison(second.comparisonId).state, 'succeeded');
+    assert.equal(h.db.get<{ n: number }>('SELECT count(*) n FROM document_versions')!.n, 2);
+    assert.equal(updated.requestComparison(current.publicationId, request).comparisonId, second.comparisonId);
+  } finally { await h.cleanup(); }
+});
 test('persisted analysis → missing predecessor → upload/link → cited comparison → review and filters', async () => {
   const h = await setup();
   try {

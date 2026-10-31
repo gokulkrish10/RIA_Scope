@@ -4,6 +4,7 @@ import type { Readable } from 'node:stream';
 import { PublicUrlSchema } from '../shared/contracts/index.js';
 import type { Download, OfficialFetcher } from './adapters/types.js';
 import { BackendError } from './errors.js';
+import { downloadDiagnostic } from './download-diagnostics.js';
 
 export function isPublicIpv4(address: string): boolean {
   const parts = address.split('.').map(Number);
@@ -60,12 +61,13 @@ export class HttpsOfficialFetcher implements OfficialFetcher {
           url = validateOfficialUrl(new URL(location, url).href, this.hosts);
           continue;
         }
-        if (status !== 200) { response.destroy(); throw new BackendError('sourceUnavailable', `Official source returned HTTP ${status}.`, 500, status === 429 || status >= 500); }
         if (Number(response.headers['content-length']) > maxBytes || (response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity')) {
           response.destroy(); throw new BackendError('sourceUnavailable', 'Source response exceeds the limit or uses unsupported transport compression.', 500);
         }
         const bytes = await readBounded(response, maxBytes);
-        return { bytes, contentType: (response.headers['content-type'] ?? '').split(';')[0]!.toLowerCase(), finalUrl: url.href };
+        const contentType = (response.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
+        if (status !== 200) throw new BackendError('sourceUnavailable', `Official source returned HTTP ${status}.`, 500, status === 429 || status >= 500, downloadDiagnostic(status, url.href, contentType, bytes));
+        return { bytes, contentType, finalUrl: url.href, httpStatus: status };
       }
       throw new BackendError('sourceUnavailable', 'Source redirect limit reached.', 500);
     } catch (error) {

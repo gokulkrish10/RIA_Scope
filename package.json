@@ -24,7 +24,9 @@
     "verify:live-analysis": "node --env-file-if-exists=.env --import tsx scripts/verify-live-analysis.ts",
     "verify:browser": "node --import tsx scripts/verify-browser.ts",
     "verify:live-browser": "node --env-file-if-exists=.env --import tsx scripts/verify-live-browser.ts",
-    "verify:sources": "node --import tsx scripts/verify-source-readiness.ts"
+    "verify:sources": "node --import tsx scripts/verify-source-readiness.ts",
+    "verify:download-diagnostics": "node --import tsx scripts/diagnose-downloads.ts",
+    "verify:rbi-history": "node --env-file-if-exists=.env --import tsx scripts/verify-rbi-history.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1160.0",

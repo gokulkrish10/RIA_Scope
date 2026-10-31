@@ -6,7 +6,7 @@ export const CandidateSchema = DiscoveredPublicationSchema.pick({
   title: true, kind: true, referenceNumber: true, publicationDate: true, effectiveDate: true,
 }).extend({ canonicalKey: z.string().min(1).max(2000), downloadUrl: PublicUrlSchema, mediaType: DocumentMediaTypeSchema });
 export type Candidate = z.infer<typeof CandidateSchema>;
-export interface Download { bytes: Buffer; contentType: string; finalUrl: string }
+export interface Download { bytes: Buffer; contentType: string; finalUrl: string; httpStatus?: number }
 export interface OfficialFetcher { get(url: string, maxBytes: number, signal?: AbortSignal): Promise<Download> }
 export interface SourceAdapter {
   readonly key: string;

@@ -1,5 +1,7 @@
 # Local Level 1 integration checkpoint
 
+> Repair update: [REAL_SOURCE_REPAIR.md](REAL_SOURCE_REPAIR.md) records the approved monitored-HTML contract extension, source diagnostics and real RBI historical verification. Statements below describe the earlier checkpoint.
+
 This is a verified local integration, **not completed Level 1 coverage**. The UI, API, SQLite persistence and worker run together. Four-region production discovery and a real historical/current comparison with validated document citations remain blocked/incomplete.
 
 ## Inputs and preservation

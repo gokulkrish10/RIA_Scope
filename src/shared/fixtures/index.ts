@@ -41,6 +41,7 @@ export const versionFixture = c.DocumentVersionSchema.parse({
   ingestionMethod: 'monitor', sourceUrl: discoveredFixture.sourceUrl, createdAt,
   extractedAt: completedAt, processingState: 'succeeded', processingError: null,
 });
+export const htmlVersionFixture = c.DocumentVersionSchema.parse({ ...versionFixture, fileName: 'synthetic-notification.html', mediaType: 'text/html', sourceUrl: 'https://example.org/synthetic-notification.html' });
 export const evidenceFixture = c.SourceEvidenceSchema.parse({
   documentId: f.document, versionId: f.version, locator: 'Section 4.2', pageNumber: 2,
   excerpt: 'The deadline in DEMO/2025/01 is extended to 31 March 2027.',
@@ -159,6 +160,7 @@ export const comparisonRequestFixture = c.ComparisonRequestSchema.parse({ curren
 
 // Explicit registry supports scripts and tests; no filesystem or Node dependencies in shared modules.
 export const fixtureCases: ReadonlyArray<{ name: string; schema: z.ZodType; value: unknown }> = [
+  { name: 'monitored-html-version', schema: c.DocumentVersionSchema, value: htmlVersionFixture },
   { name: 'sources', schema: c.SourceListResponseSchema, value: sourcesFixture },
   { name: 'discovered', schema: c.DiscoveredPublicationSchema, value: discoveredFixture },
   ...[publicationFixture, missingPredecessorPublicationFixture, ambiguousPublicationFixture, extractionFailedPublicationFixture, queuedPublicationFixture].map((value, i) => ({ name: `publication-${i}`, schema: c.PublicationDetailSchema, value })),
