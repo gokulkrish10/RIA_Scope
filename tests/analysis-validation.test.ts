@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bedrockSettings, structuredResponse } from '../src/backend/analysis/bedrock.js';
+import { BedrockModel, bedrockSettings, structuredResponse } from '../src/backend/analysis/bedrock.js';
+import { BackendError } from '../src/backend/errors.js';
 import { publicObligations, validateComparison, validateExtraction } from '../src/backend/analysis/validate.js';
 import { segmentPages, validateEvidence, type VersionText } from '../src/backend/analysis/evidence.js';
 import { resolveReferences, relationshipState } from '../src/backend/analysis/resolve.js';
@@ -8,6 +9,7 @@ import { highlightDiff } from '../src/shared/presentation/diff.js';
 import { changeFixtures, shortenedDeadlineFixture, fixtureIds } from '../src/shared/fixtures/index.js';
 import { citationTransport } from '../src/backend/analysis/model-citations.js';
 import { z } from 'zod';
+import type { ConverseCommandOutput } from '@aws-sdk/client-bedrock-runtime';
 import { ModelExtractionSchema } from '../src/backend/analysis/schemas.js';
 import { AnalysisEngine } from '../src/backend/analysis/engine.js';
 import { explicitClauseScope } from '../src/backend/analysis/clause-scope.js';
@@ -23,6 +25,46 @@ test('Bedrock adapter accepts one structured tool object and rejects prose, trun
   assert.throws(() => structuredResponse({ stopReason: 'max_tokens', output: { message: { role: 'assistant', content: [block] } } }));
   assert.throws(() => structuredResponse({ stopReason: 'end_turn', output: { message: { role: 'assistant', content: [{ text: '```json {} ```' }] } } }));
   assert.throws(() => structuredResponse({ stopReason: 'tool_use', output: { message: { role: 'assistant', content: [block, block] } } }));
+});
+const bedrockTestEnv = {
+  AWS_ACCESS_KEY_ID: 'synthetic-key', AWS_SECRET_ACCESS_KEY: 'synthetic-private-secret',
+  AWS_SESSION_TOKEN: 'synthetic-session', AWS_REGION: 'us-east-1', BEDROCK_MODEL_ID: 'synthetic-model',
+};
+function toolResponse(input: Record<string, unknown>) {
+  return { stopReason: 'tool_use', output: { message: { role: 'assistant', content: [{ toolUse: { toolUseId: 'synthetic-tool-use', name: 'record_analysis', input } }] } } } as unknown as Pick<ConverseCommandOutput, 'stopReason' | 'output'>;
+}
+test('Bedrock Converse request forces structured output and binds citation IDs to server text', async () => {
+  let wire: unknown;
+  const model = new BedrockModel(bedrockTestEnv, async (input, settings, signal) => {
+    wire = input;
+    assert.equal(settings.region, 'us-east-1');
+    assert.equal(settings.modelId, 'synthetic-model');
+    assert.equal(signal.aborted, false);
+    return toolResponse({
+      documentStatus: null, statusEvidence: [], businessAreas: ['banking'], effectiveDate: null, effectiveDateEvidence: [],
+      obligations: [{ text: 'Retain records.', requirementStatus: 'mandatory', businessAreas: ['banking'], applicableEntities: ['banks'], departments: [], regulatedActivities: [], effectiveDate: null, complianceDeadline: null, evidence: [{ quoteId: 'q1' }] }],
+      references: [],
+    });
+  });
+  const result = validateExtraction(await model.generate('Synthetic instruction', current, ModelExtractionSchema, new AbortController().signal), current);
+  assert.equal(result.obligations[0]?.evidence[0]?.excerpt, text);
+  assert.equal(result.obligations[0]?.evidence[0]?.versionId, current.versionId);
+  const request = wire as { modelId: string; messages: { content: { text: string }[] }[]; toolConfig: { toolChoice: { tool: { name: string } }; tools: { toolSpec: { inputSchema: { json: { properties: { obligations: { items: { properties: { evidence: { items: { properties: unknown } } } } } } } } } }[] } };
+  assert.equal(request.modelId, 'synthetic-model');
+  assert.equal(request.toolConfig.toolChoice.tool.name, 'record_analysis');
+  assert.deepEqual(request.toolConfig.tools[0]!.toolSpec.inputSchema.json.properties.obligations.items.properties.evidence.items.properties, { quoteId: { type: 'string', enum: ['q1'] } });
+  assert.equal(JSON.parse(request.messages[0]!.content[0]!.text).sourceQuotes.q1.excerpt, text);
+  assert.doesNotMatch(JSON.stringify(request), /synthetic-private-secret|synthetic-session/);
+});
+test('Bedrock refuses invented quote IDs, expired credentials and access errors', async () => {
+  const unknownQuote = new BedrockModel(bedrockTestEnv, async () => toolResponse({ evidence: [{ quoteId: 'q999' }] }));
+  await assert.rejects(unknownQuote.generate('Synthetic', current, ModelExtractionSchema, new AbortController().signal), /unknown or malformed source quote ID/);
+  let invoked = false;
+  const expired = new BedrockModel({ ...bedrockTestEnv, AWS_CREDENTIAL_EXPIRATION: '2020-01-01T00:00:00.000Z' }, async () => { invoked = true; return toolResponse({}); });
+  await assert.rejects(expired.generate('Synthetic', current, ModelExtractionSchema, new AbortController().signal), /expired/);
+  assert.equal(invoked, false);
+  const denied = new BedrockModel(bedrockTestEnv, async () => { throw Object.assign(new Error('synthetic-private-secret'), { name: 'AccessDeniedException' }); });
+  await assert.rejects(denied.generate('Synthetic', current, ModelExtractionSchema, new AbortController().signal), error => error instanceof BackendError && /access denied/.test(error.message) && !error.message.includes('synthetic-private-secret'));
 });
 test('synthetic extraction preserves unknown dates and consultations as proposed requirements', () => {
   const value = validateExtraction(extraction, current);
@@ -114,6 +156,19 @@ test('validated chunk caching makes repeat analysis idempotent and resumes after
   assert.equal(calls, version.segments.length + 1);
   await engine.extract(version, context, cache, new AbortController().signal);
   assert.equal(calls, version.segments.length + 1);
+});
+test('a long document over the shared obligation limit fails clearly without publishing a partial result', async () => {
+  const version: VersionText = { ...current, segments: segmentPages([{ pageNumber: 1, text: 'banks shall retain records. '.repeat(320) }]) };
+  let calls = 0;
+  const model = { identity: 'synthetic-over-limit', async generate(_prompt: string, payload: unknown) {
+    calls++;
+    const segment = (payload as VersionText).segments[0]!;
+    const cite = { documentId: version.documentId, versionId: version.versionId, locator: segment.locator, pageNumber: segment.pageNumber, excerpt: 'banks shall retain records.' };
+    return { documentStatus: null, statusEvidence: [], businessAreas: ['banking'], effectiveDate: null, effectiveDateEvidence: [],
+      obligations: Array.from({ length: 105 }, (_, index) => ({ ...extraction.obligations[0], text: `Synthetic duty ${segment.locator} ${index}`, evidence: [cite] })), references: [] };
+  } };
+  await assert.rejects(new AnalysisEngine(model).extract(version, { title: 'Synthetic long document', kind: 'guideline', regulatorName: 'Synthetic' }, { read: () => null, write: () => {} }, new AbortController().signal), error => error instanceof BackendError && /above the shared response limit/.test(error.message) && !error.retryable);
+  assert.equal(calls, version.segments.length);
 });
 test('invalid citations never enter the analysis cache', async () => {
   let writes = 0;

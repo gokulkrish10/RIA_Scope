@@ -103,9 +103,9 @@ export class Worker {
     const version = this.repository.versionForJob(job);
     this.repository.startExtraction(job);
     await this.storage.read(version.original_key); // Verify the stored bytes before parsing.
-    const mediaType = (JSON.parse(version.metadata_json) as { mediaType: string }).mediaType;
+    const { mediaType, sourceUrl } = JSON.parse(version.metadata_json) as { mediaType: string; sourceUrl: string | null };
     let extracted;
-    try { extracted = await extractText(this.storage.path(version.original_key), mediaType, signal); }
+    try { extracted = await extractText(this.storage.path(version.original_key), mediaType, signal, sourceUrl ?? undefined); }
     catch (error) {
       this.repository.progress(job, 'extractionDiagnostic', { versionId: version.id, originalHash: version.original_key, extractionError: safeFailure(error, 'extractionFailed').message });
       throw error;

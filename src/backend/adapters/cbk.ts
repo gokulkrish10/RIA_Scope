@@ -4,8 +4,12 @@ import { CandidateSchema, type SourceAdapter } from './types.js';
 import { BackendError } from '../errors.js';
 import { SourceConfigSchema } from '../../shared/contracts/index.js';
 import { rbiAdapter } from './rbi.js';
+import { samaAdapter } from './sama.js';
+import { dfsaAdapter } from './dfsa.js';
+import { bogAdapter, bogNoticesAdapter } from './bog.js';
 
 export const CBK_SOURCE_ID = '8c0c0445-9ed4-4ebc-887e-54bb9dcd5291';
+export const CBK_LISTING_SOURCE_ID = '7edc50d9-6e88-4688-b683-b4fd761a93a8';
 export const CbkOptionsSchema = z.strictObject({
   maxDocuments: z.number().int().min(1).max(100).default(1),
   titleIncludes: z.string().min(1).max(200).optional(),
@@ -42,12 +46,20 @@ export const cbkAdapter: SourceAdapter = {
     return [...candidates.values()];
   },
 };
-export const adapters = new Map([[cbkAdapter.key, cbkAdapter], [rbiAdapter.key, rbiAdapter]]);
+export const adapters = new Map([[cbkAdapter.key, cbkAdapter], [rbiAdapter.key, rbiAdapter], [samaAdapter.key, samaAdapter], [dfsaAdapter.key, dfsaAdapter], [bogAdapter.key, bogAdapter], [bogNoticesAdapter.key, bogNoticesAdapter]]);
 export function cbkSource(now: string) {
   return SourceConfigSchema.parse({
     id: CBK_SOURCE_ID, name: 'Central Bank of Kenya — circulars', country: 'KE', region: 'africa',
     regulatorId: 'af8b2367-c260-41d8-aa9b-d142c75a83ca', regulatorName: 'Central Bank of Kenya',
     url: 'https://www.centralbank.go.ke/policy-procedures/legislation-and-guidelines/circulars/',
     enabled: true, monitoringIntervalMinutes: 1440, lastMonitoredAt: null, nextMonitorAt: now, createdAt: now, updatedAt: now,
+  });
+}
+export function cbkListingSource(now: string) {
+  return SourceConfigSchema.parse({
+    ...cbkSource(now), id: CBK_LISTING_SOURCE_ID,
+    name: 'Central Bank of Kenya — current circular listing (image-only PDFs may fail extraction)',
+    enabled: false,
+    nextMonitorAt: null,
   });
 }

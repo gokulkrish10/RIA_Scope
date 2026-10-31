@@ -2,9 +2,9 @@
 import { readFile } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 import { load } from 'cheerio';
-import { regulatoryHtml } from './html-body.mjs';
+import { officialRegulatoryHtml } from './html-body.mjs';
 
-const [filePath, mediaType] = process.argv.slice(2);
+const [filePath, mediaType, sourceUrl] = process.argv.slice(2);
 const bytes = await readFile(filePath);
 const maxText = 2_000_000;
 let pages = [];
@@ -55,7 +55,8 @@ if (mediaType === 'application/pdf') {
   const text = $('w\\:p').toArray().map(p => $(p).find('w\\:t').text()).join('\n').trim();
   pages = [{ pageNumber: null, text }];
 } else if (mediaType === 'text/html') {
-  pages = regulatoryHtml(new TextDecoder('utf-8', { fatal: true }).decode(bytes)).pages;
+  if (!sourceUrl) throw new Error('HTML landing page or unsupported regulatory body; source URL is required.');
+  pages = officialRegulatoryHtml(new TextDecoder('utf-8', { fatal: true }).decode(bytes), sourceUrl).pages;
 } else if (mediaType === 'text/plain') {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').trim();
   if (text.includes('\u0000')) throw new Error('Binary text document');

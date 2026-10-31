@@ -84,14 +84,21 @@ export class AnalysisEngine {
     const dates = [...new Set(results.flatMap(r => r.effectiveDate === null ? [] : [r.effectiveDate]))];
     // Conflicting chunk assertions remain unknown, never resolved by guessing.
     const unique = <T>(values: T[]) => [...new Map(values.map(value => [JSON.stringify(value), value])).values()];
-    return ModelExtractionSchema.parse({
+    const merged = {
       documentStatus: statuses.length === 1 ? statuses[0] : null,
       statusEvidence: unique(results.flatMap(r => r.statusEvidence)),
       businessAreas: unique(results.flatMap(r => r.businessAreas)),
       effectiveDate: dates.length === 1 ? dates[0] : null,
       effectiveDateEvidence: unique(results.flatMap(r => r.effectiveDateEvidence)),
       obligations: unique(results.flatMap(r => r.obligations)), references: unique(results.flatMap(r => r.references)),
-    });
+    };
+    const checked = ModelExtractionSchema.safeParse(merged);
+    if (!checked.success) {
+      const issue = checked.error.issues.find(item => item.path[0] === 'obligations' && item.code === 'too_big');
+      if (issue) throw new BackendError('extractionFailed', `Structured analysis found ${merged.obligations.length} candidate obligations, above the shared response limit. No partial result was published; analyze a shorter official document or coordinate a higher contract limit.`, 422);
+      throw new BackendError('extractionFailed', 'Combined analysis chunks violate the structured extraction schema. No partial result was published.', 422);
+    }
+    return checked.data;
   }
   async compare(current: VersionText, previous: VersionText | null, context: unknown, signal: AbortSignal) {
     const scoped = explicitClauseScope(current, previous, context);

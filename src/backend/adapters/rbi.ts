@@ -6,6 +6,7 @@ import { regulatoryHtml } from '../html-body.mjs';
 import { SourceConfigSchema } from '../../shared/contracts/index.js';
 
 export const RBI_SOURCE_ID = 'a9a3a4fa-9339-4db5-ae97-57a99fcaf0fa';
+export const RBI_LISTING_SOURCE_ID = '728db66c-4dfe-47ab-a613-eae7cd58276b';
 const hosts = ['www.rbi.org.in', 'rbi.org.in', 'rbidocs.rbi.org.in'];
 const documentUrl = z.url().refine(value => {
   const url = new URL(value);
@@ -43,4 +44,7 @@ export const rbiAdapter: SourceAdapter = {
 };
 export function rbiSource(now: string) {
   return SourceConfigSchema.parse({ id: RBI_SOURCE_ID, name: 'RBI — selected historical notifications (not general discovery)', country: 'IN', region: 'india', regulatorId: '342ed5dd-8f32-48f6-b849-9a98430561b7', regulatorName: 'Reserve Bank of India', url: 'https://www.rbi.org.in/Scripts/NotificationUser.aspx', enabled: true, monitoringIntervalMinutes: 1440, lastMonitoredAt: null, nextMonitorAt: now, createdAt: now, updatedAt: now });
+}
+export function rbiListingSource(now: string) {
+  return SourceConfigSchema.parse({ id: RBI_LISTING_SOURCE_ID, name: 'RBI — current notifications listing', country: 'IN', region: 'india', regulatorId: '342ed5dd-8f32-48f6-b849-9a98430561b7', regulatorName: 'Reserve Bank of India', url: 'https://www.rbi.org.in/Scripts/NotificationUser.aspx', enabled: true, monitoringIntervalMinutes: 1440, lastMonitoredAt: null, nextMonitorAt: now, createdAt: now, updatedAt: now });
 }

@@ -36,7 +36,7 @@ for (const url of urls) {
         row.pdfPages = pages;
       } finally { await task.destroy(); }
     }
-    try { const text = await extractText(storage.path(original.key), diagnostic.signature === 'html' ? 'text/html' : 'application/pdf'); row.extractedCharacters = text.text.length; }
+    try { const text = await extractText(storage.path(original.key), diagnostic.signature === 'html' ? 'text/html' : 'application/pdf', undefined, url); row.extractedCharacters = text.text.length; }
     catch (error) { row.extractionError = error instanceof Error ? error.message : 'Extraction failed'; }
     rows.push(row);
   } catch (error) { rows.push({ requestedUrl: url, ...(error instanceof BackendError ? error.diagnostic : {}), downloadError: error instanceof BackendError ? error.message : 'Download or diagnostic parsing failed' }); }

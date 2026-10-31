@@ -8,9 +8,9 @@ export const ExtractedTextSchema = z.strictObject({
   pages: z.array(z.strictObject({ pageNumber: z.number().int().positive().nullable(), text: z.string(), locator: z.string().min(1).max(400).optional() })).min(1).max(300),
 });
 export type ExtractedText = z.infer<typeof ExtractedTextSchema>;
-export async function extractText(filePath: string, mediaType: string, signal?: AbortSignal): Promise<ExtractedText> {
+export async function extractText(filePath: string, mediaType: string, signal?: AbortSignal, sourceUrl?: string): Promise<ExtractedText> {
   return new Promise((resolve, reject) => {
-    execFile(process.execPath, ['--max-old-space-size=256', fileURLToPath(new URL('./extraction-child.mjs', import.meta.url)), filePath, mediaType], {
+    execFile(process.execPath, ['--max-old-space-size=256', fileURLToPath(new URL('./extraction-child.mjs', import.meta.url)), filePath, mediaType, ...(sourceUrl ? [sourceUrl] : [])], {
       timeout: 45_000, maxBuffer: 16 * 1024 * 1024, killSignal: 'SIGKILL', env: {}, ...(signal ? { signal } : {}),
     }, (error, stdout, stderr) => {
       if (error) {
