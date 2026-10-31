@@ -1,6 +1,6 @@
 # ReguLens — Regulatory Change Impact Agent
 
-**Level 1: Monitor, discover and understand regulatory changes.** Built for Azentio Build Labs.
+** Monitor, discover and understand regulatory changes.** Built for Azentio Build Labs.
 
 ReguLens helps BFSI compliance teams collect official regulatory publications, extract structured obligations with source citations, compare supported clauses with earlier regulations, and record human review. It combines a searchable dashboard, configurable source adapters, a persistent background worker and Amazon Bedrock analysis.
 
@@ -196,9 +196,4 @@ For a local production preview, keep the regular API and worker running and run 
 | Bedrock fails | Read the job error; check temporary credentials, expiry, explicit region/model and model permissions. Retry the exact version after correcting the cause. |
 | Demo preparation cannot find data | Use fresh-clone setup or obtain the saved private evidence; it is intentionally not in Git. |
 
-## Team and documentation
 
-Gokul owns backend ingestion, persistence, workers and AI integration; Sethu owns the frontend. Coordinate source-adapter and shared-contract changes together. Redundant historical handoff/checkpoint notes have been consolidated into this README; previous versions remain in Git history.
-
-- [API contract](docs/API_CONTRACT.md): exact frontend/backend integration specification.
-- [Presentation walkthrough](docs/LEVEL1_DEMO_PRESENTATION.md): saved-demo sequence and exact test inputs.
