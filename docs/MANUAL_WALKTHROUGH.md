@@ -1,5 +1,7 @@
 # Manual walkthrough: integrated Level 1 application
 
+> For the current presentation, follow [LEVEL1_DEMO_PRESENTATION.md](LEVEL1_DEMO_PRESENTATION.md) and run `npm run demo`. It replaces the multiple-terminal/multiple-database setup below. The following walkthrough documents the earlier checkpoint; do not mix its startup commands with the demo launcher.
+
 Checked against local `dev` commit `790593186e5b727c7e5da325624d1ad204728f9b` and shared contract **1.1.0** on 2026-10-31. Paths and IDs below refer to this checkout. This guide was prepared from code, the read-only verification databases and saved reports; its manual steps have **not** been run as part of writing it. An HTTP `202` means accepted, not successfully processed.
 
 ## Five-minute judge demo (saved real evidence, no network/model call)

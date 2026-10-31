@@ -30,7 +30,11 @@
     "verify:rbi-history": "node --env-file-if-exists=.env --import tsx scripts/verify-rbi-history.ts",
     "verify:four-region": "node --import tsx scripts/verify-four-region.ts",
     "verify:regional-analysis": "node --env-file-if-exists=.env --import tsx scripts/verify-regional-analysis.ts",
-    "verify:four-region-browser": "node --env-file-if-exists=.env --import tsx scripts/verify-four-region-browser.ts"
+    "verify:four-region-browser": "node --env-file-if-exists=.env --import tsx scripts/verify-four-region-browser.ts",
+    "demo": "node --env-file-if-exists=.env --import tsx scripts/demo.ts",
+    "demo:live": "node --env-file-if-exists=.env --import tsx scripts/demo.ts --live-ai",
+    "demo:prepare": "python3 scripts/prepare-level1-demo.py",
+    "verify:demo": "node --env-file-if-exists=.env --import tsx scripts/verify-demo.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1160.0",

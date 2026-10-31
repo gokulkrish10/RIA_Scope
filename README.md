@@ -1,8 +1,10 @@
-# Regulatory Change Impact Agent — Level 1 contracts
+# Regulatory Change Impact Agent — Level 1
+
+For the local presentation, use **`npm run demo`**. It starts the authenticated frontend, backend and worker together using `.data/level1-demo`. Do not start separate backend/worker terminals for this mode. See [the presentation guide](docs/LEVEL1_DEMO_PRESENTATION.md) for the exact demo path, saved evidence, uploads and optional live Bedrock mode.
 
 See [REAL_SOURCE_REPAIR.md](docs/REAL_SOURCE_REPAIR.md) for the local real-source repair, approved monitored HTML contract 1.1.0, diagnostics and historical RBI verification.
 
-This repository contains shared TypeScript/Zod contracts, synthetic fixtures, and a local SQLite backend with monitoring, document ingestion, cited Bedrock extraction and historical comparison. Sethu’s Level 1 frontend is integrated on a separate local branch.
+This repository contains the integrated frontend, shared TypeScript/Zod contracts, synthetic fixtures, and a local SQLite backend with monitoring, document ingestion, cited Bedrock extraction and historical comparison.
 
 - [API contract](docs/API_CONTRACT.md): wire formats, field/state rules, endpoint registry and processing semantics.
 - [Sethu integration guide](docs/SETHU_INTEGRATION.md): imports, examples, implementation status and handoff.
@@ -21,4 +23,4 @@ npm run check
 
 Fixtures are invented demonstration content, not regulatory advice or verified source configurations.
 
-See [the current integration guide](docs/LEVEL1_INTEGRATION.md) for startup, credentials, browser verification and remaining blockers. The default frontend mode is Live API; synthetic fixtures remain explicitly labelled and separate. This is a verified integration checkpoint, not completed Level 1 coverage.
+See [the Level 1 verification status](docs/LEVEL1_STATUS.md) for bounded source coverage and remaining limitations, and [the integration guide](docs/LEVEL1_INTEGRATION.md) for the earlier integration checkpoint. Synthetic fixtures remain explicitly labelled and separate from saved real evidence.

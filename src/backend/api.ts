@@ -15,7 +15,7 @@ import { uploadMultipart } from './upload.js';
 
 type Request = { method: string; url: string; headers: Record<string, string | undefined>; body?: unknown };
 export type ApiResponse = { status: number; headers: Record<string, string>; body: unknown };
-export interface ApiOptions { analysis?: AnalysisService; storage?: OriginalStorage; reviewerId?: string }
+export interface ApiOptions { analysis?: AnalysisService; storage?: OriginalStorage; reviewerId?: string; modelRequestsEnabled?: boolean }
 export function createApi(repository: Repository, writeToken: string, options: ApiOptions = {}) {
   if (writeToken.length < 32) throw new Error('RIA_WRITE_TOKEN must contain at least 32 characters');
   const matches = (template: string, path: string, name: string): string | null => {
@@ -69,8 +69,13 @@ export function createApi(repository: Repository, writeToken: string, options: A
         if (request.method === API_CONTRACT.updateSource.method && sourceId) return json(API_CONTRACT.updateSource.responses[200], repository.updateSource(IdSchema.parse(sourceId), request.body));
         if (options.analysis) {
           const compareId = matches(API_CONTRACT.requestComparison.path, path, 'publicationId');
-          if (request.method === API_CONTRACT.requestComparison.method && compareId) return acceptedComparison(options.analysis.requestComparison(IdSchema.parse(compareId), request.body));
           const linkId = matches(API_CONTRACT.linkPredecessor.path, path, 'publicationId');
+          if (options.modelRequestsEnabled === false &&
+              ((request.method === API_CONTRACT.requestComparison.method && compareId) ||
+               (request.method === API_CONTRACT.linkPredecessor.method && linkId))) {
+            throw new BackendError('forbidden', 'New AI analysis is paused in the saved-evidence demo. Existing results and reviews remain available. The operator can restart with npm run demo:live to enable Bedrock.', 403);
+          }
+          if (request.method === API_CONTRACT.requestComparison.method && compareId) return acceptedComparison(options.analysis.requestComparison(IdSchema.parse(compareId), request.body));
           if (request.method === API_CONTRACT.linkPredecessor.method && linkId) return acceptedComparison(options.analysis.linkPredecessor(IdSchema.parse(linkId), request.body));
           const reviewId = matches(API_CONTRACT.updateReview.path, path, 'publicationId');
           if (request.method === API_CONTRACT.updateReview.method && reviewId) return json(API_CONTRACT.updateReview.responses[200], options.analysis.updateReview(IdSchema.parse(reviewId), request.body, options.reviewerId));
