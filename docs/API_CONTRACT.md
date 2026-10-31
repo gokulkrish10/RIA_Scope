@@ -1,10 +1,10 @@
 # Regulatory Change Impact Agent — Level 1 API contract
 
-Contract version: **1.1.0** (`CONTRACT_VERSION`). These schemas originated in the shared foundation. The endpoints are now implemented locally; see [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for verified coverage and limitations. Direct reads and writes require the trusted server bearer token; browsers authenticate to the local gateway, which injects that token server-side. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
+Contract version: **1.1.0** (`CONTRACT_VERSION`). These schemas originated in the shared foundation. The endpoints are now implemented locally; see the [README](../README.md) for setup, verified coverage and limitations. Direct reads and writes require the trusted server bearer token; browsers authenticate to the local gateway, which injects that token server-side. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
 
 ## Approved monitored HTML extension (1.1.0)
 
-`DocumentVersion.mediaType` additionally accepts `text/html` for monitored official regulatory bodies. PDF/DOCX/text upload descriptors remain unchanged and reject HTML. Import the updated shared schemas in both consumers. HTML evidence uses source body/section/anchor locators without a page number. Fields, endpoints and status enums are unchanged. See [REAL_SOURCE_REPAIR.md](REAL_SOURCE_REPAIR.md) for routing, original preservation, limitations and live evidence.
+`DocumentVersion.mediaType` additionally accepts `text/html` for monitored official regulatory bodies. PDF/DOCX/text upload descriptors remain unchanged and reject HTML. Import the updated shared schemas in both consumers. HTML evidence uses source body/section/anchor locators without a page number. Fields, endpoints and status enums are unchanged. Original bytes remain private; body extraction excludes navigation and rejects challenge/login/error content. Display only escaped extracted text. The [README](../README.md#official-source-evidence-and-limits) records the verified source scope.
 
 ## Wire conventions
 
@@ -41,7 +41,7 @@ Reference variants:
 - `unresolved`: nonblank `reason`; no target IDs or candidates. Never substitute a guessed target ID or empty successful result.
 - `ambiguous`: nonblank `reason` and at least two distinct `candidatePublicationIds`; no target IDs.
 
-Only successful extraction exposes `summary`, obligations and references. Until then summary is null and arrays are empty **with an explicit queued/processing/failed state**. Failed processing requires `processingError.code: extractionFailed`; successful extraction may legitimately find zero obligations. Detail must contain its current version; obligation/reference evidence cites that version. Historical versions remain immutable.
+Only successful structured extraction exposes `summary`, obligations and references. Text ingestion and structured analysis are separate: an ingestion job can have succeeded while structured analysis has not been queued, so null summary and empty detail arrays alone do not establish a successful obligations result. Read the obligations endpoint for readiness; it returns 409 until a structured result exists. Once analysis is queued, publication processing state reflects that stage. Failed processing requires `processingError.code: extractionFailed`; successful extraction may legitimately find zero obligations. Detail must contain its current version; obligation/reference evidence cites that version. Historical versions remain immutable.
 
 ## Enums and independent state dimensions
 
@@ -139,7 +139,7 @@ All non-2xx responses use `ApiErrorSchema`:
 | HTTP status | Error codes / meaning |
 | --- | --- |
 | 400 | `validationError`: malformed JSON/query/UUID, unknown fields, invalid metadata/schema |
-| 401 / 403 | `unauthorized` / `forbidden` if authentication/authorization is configured |
+| 401 / 403 | `unauthorized` / `forbidden`; direct reads and writes always require the trusted backend token |
 | 404 | `notFound`: resource/source/regulator/reference absent or wrong resource kind |
 | 409 | `conflict`, `resultNotReady`, `jobFailed`, `jobBlocked` as documented per operation |
 | 413 | `payloadTooLarge`: file, metadata or total request limit exceeded |
@@ -217,7 +217,7 @@ After acceptance, any extraction failure is persisted as a failed ingestion job 
 | --- | --- | --- | --- |
 | GET `/api/v1/publications` | PublicationSearchQuerySchema via parsePublicationSearchParams | 200 PublicationListResponseSchema | Common errors |
 | GET `/api/v1/publications/:publicationId` | PublicationPathSchema | 200 PublicationDetailSchema in any processing state | 404 missing publication |
-| GET `/api/v1/publications/:publicationId/obligations` | PublicationPathSchema | 200 PublicationObligationsResponseSchema | 404 missing publication; 409 resultNotReady while queued/processing; 422 extractionFailed after extraction failure |
+| GET `/api/v1/publications/:publicationId/obligations` | PublicationPathSchema | 200 PublicationObligationsResponseSchema | 404 missing publication; 409 resultNotReady until a structured result exists; 422 extractionFailed after extraction/analysis failure |
 
 Obligations response: `{publicationId,versionId,processingState:"succeeded",obligations:Obligation[]}`. It is deliberately not paginated for Level 1 and only available after successful extraction. An empty obligations array here means extraction succeeded and found no obligations. Detail returns current-version obligations/references plus metadata for all document versions; it does not expose raw document bytes or private storage URLs.
 
@@ -259,4 +259,20 @@ Permitted transitions: any review state to any review state (including reopening
 
 ## Validation boundary
 
-Run `npm run check`. It type-checks Node and browser imports, validates all fixtures including JSON round trips, and tests rejection of invalid enums, dates, evidence, job results, errors, pagination and unresolved relationships. Runtime schema checks validate a single payload; backend services additionally enforce catalog membership, cross-resource ownership, immutable version lineage, deduplication, concurrency, state transitions, actual file bytes and safe public serialization. No end-to-end HTTP/worker/database test is claimed because those components do not exist yet.
+Run `npm run check`. It type-checks Node and browser imports, validates all fixtures including JSON round trips, and tests rejection of invalid enums, dates, evidence, job results, errors, pagination and unresolved relationships. Runtime schema checks validate a single payload; backend services additionally enforce catalog membership, cross-resource ownership, immutable version lineage, deduplication, concurrency, state transitions, actual file bytes and safe public serialization. The implemented backend adds HTTP/worker/SQLite integration tests; Chrome verification covers the UI and gateway. Tests with synthetic source/model responses are distinct from saved real-source verification. See the [README](../README.md#validation-and-production-build) for commands and evidence boundaries.
+
+
+## Runtime modes and coordinated follow-ups
+
+The saved-evidence demo (`npm run demo`) reads existing real analysis and permits uploads/review writes, but returns the existing `403 forbidden` envelope for new comparison or predecessor-link requests. It does not execute model jobs. `npm run demo:live` enables new Bedrock work; the regular backend retains its existing behavior. No fields, routes or enum values change between modes. Both demo modes pause automatic scheduling.
+
+The following gaps are documented rather than filled with incompatible public fields:
+
+- **Structured analysis trigger/state:** no dedicated HTTP trigger or public analysis job kind exists. The regular worker can enqueue analysis automatically; `backend:analyze -- <version UUID>` exposes an explicit job ID for a chosen version using the existing `ingestion` kind. The original text-ingestion job remains an immutable snapshot. A discoverable analysis job ID and separate analysis state require a coordinated extension.
+- **Job/source history:** individual jobs can be read by ID; there is no list/history endpoint. The frontend's operation activity and last-success/error details are session-scoped, while source configuration and last-attempt timestamps persist.
+- **Proposed requirements/document status:** these statuses are stored internally. Public consultations retain `kind: consultation`; proposed obligation text is labelled `Proposed requirement: `. Later withdrawal/status notices belong in the public summary/text. Do not invent public `documentStatus` or `requirementStatus` fields independently.
+- **Insufficient clause evidence:** if a predecessor is known but supported clause pairs cannot be established, return a failed comparison with `comparisonFailed` and an explanation. Missing/ambiguous predecessors use the existing blocked state. A distinct `insufficientEvidence` state would require agreement; never substitute `noMaterialChange`.
+- **Relationships and highlights:** use publication detail references, the existing predecessor operation and the browser-safe `highlightDiff` helper in `src/shared/presentation/diff.ts`. There is no separate relationships endpoint or public diff-fragment field. Render fragments as escaped text.
+- **Private originals:** no document-download endpoint is defined. Private storage paths must not enter public responses.
+
+Any extension must update shared schemas, inferred types, backend, frontend, fixtures and tests together.

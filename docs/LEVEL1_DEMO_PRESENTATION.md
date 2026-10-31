@@ -1,6 +1,6 @@
 # Local Level 1 presentation
 
-Use local `dev` and **one terminal, one command**:
+Use the integrated application with **one terminal, one command**:
 
 ```sh
 cd /Users/sst/Downloads/GokulHackathons/Azentio_Onsite/RIA
@@ -68,15 +68,15 @@ npm run demo:live
 
 This uses the **same database and UI** and enables the existing real Bedrock extraction/comparison pipeline. New successful uploads queue AI analysis, and requested comparisons use Bedrock. Configure temporary `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_CREDENTIAL_EXPIRATION`, `AWS_REGION`, `BEDROCK_MODEL_ID` in the ignored local environment first. Local credential validation runs before startup; model access and output validity are checked by the existing pipeline. This mode may incur charges and was **not invoked during cleanup**.
 
-Existing text-only uploads are not automatically reanalyzed merely by changing mode. For a specific existing version, an operator can use the existing `backend:analyze` command with `RIA_DATA_DIR=.data/level1-demo` and its exact version UUID. See [ANALYSIS_INTEGRATION.md](ANALYSIS_INTEGRATION.md). Do not re-upload repeatedly while a job is running.
+Existing text-only uploads are not automatically reanalyzed merely by changing mode. For a specific existing version, an operator can use the existing `backend:analyze` command with `RIA_DATA_DIR=.data/level1-demo` and its exact version UUID. See [the README analysis instructions](../README.md#real-bedrock-analysis). Do not re-upload repeatedly while a job is running.
 
 Default saved mode blocks new comparison/predecessor-link requests immediately with the existing `403 forbidden` envelope and disables their UI controls. It still allows reads, local uploads and review saves. No schemas or endpoint paths changed. Normal backend startup retains its previous behavior.
 
 ## Monitoring, scheduling and boundaries
 
-**Run now** / **Run enabled sources** intentionally contact official websites and create separately tracked monitoring/ingestion jobs. Availability is external and can fail. Do not click these merely to show the saved demo. Both demo launch modes pause the automatic scheduler, clearly labelled in the banner; saving a frequency alone will not run scheduled monitoring in demo mode. Use the regular worker with `RIA_SCHEDULER_ENABLED=true` in an isolated database to demonstrate scheduling as documented in [BACKEND_INGESTION.md](BACKEND_INGESTION.md).
+**Run now** / **Run enabled sources** intentionally contact official websites and create separately tracked monitoring/ingestion jobs. Availability is external and can fail. Do not click these merely to show the saved demo. Both demo launch modes pause the automatic scheduler, clearly labelled in the banner; saving a frequency alone will not run scheduled monitoring in demo mode. Use the regular worker with `RIA_SCHEDULER_ENABLED=true` in an isolated database to demonstrate scheduling as documented in [the README regular-worker setup](../README.md#fresh-clone-setup).
 
-See [LEVEL1_STATUS.md](LEVEL1_STATUS.md) for previously verified listing/fetch/extraction/analysis coverage. Discovery is bounded, not exhaustive. CBUAE access was blocked; DFSA supplies UAE evidence. Current Kenya PDFs were image-only; the displayed CBK historical circular is a different readable source. No OCR or automatic legal certification is claimed. All six change classes have labelled synthetic tests, not six proven real changes.
+See [the README source coverage](../README.md#official-source-evidence-and-limits) for previously verified listing/fetch/extraction/analysis coverage. Discovery is bounded, not exhaustive. CBUAE access was blocked; DFSA supplies UAE evidence. Current Kenya PDFs were image-only; the displayed CBK historical circular is a different readable source. No OCR or automatic legal certification is claimed. All six change classes have labelled synthetic tests, not six proven real changes.
 
 ## Verification of this cleanup
 
