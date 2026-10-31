@@ -13,12 +13,15 @@
     "backend:start": "node --env-file-if-exists=.env --import tsx scripts/backend.ts serve",
     "backend:worker": "node --env-file-if-exists=.env --import tsx scripts/backend.ts worker",
     "backend:worker-once": "node --env-file-if-exists=.env --import tsx scripts/backend.ts worker-once",
+    "backend:analyze": "node --env-file-if-exists=.env --import tsx scripts/backend.ts analyze",
     "verify:real-ingestion": "node --import tsx scripts/verify-real-ingestion.ts",
+    "verify:live-analysis": "node --env-file-if-exists=.env --import tsx scripts/verify-live-analysis.ts",
     "validate:fixtures": "node --import tsx scripts/validate-fixtures.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.browser.json",
     "check": "npm run typecheck && npm run validate:fixtures && npm test"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.1160.0",
     "@napi-rs/canvas": "0.1.80",
     "cheerio": "1.1.2",
     "fflate": "0.8.2",

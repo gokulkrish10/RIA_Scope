@@ -5,13 +5,18 @@ import {
   API_CONTRACT, ApiErrorSchema, IdSchema, MonitorRunResultSchema,
   PublicationListResponseSchema, SourceListResponseSchema,
   parsePaginationSearchParams, parsePublicationSearchParams,
+  UPLOAD_LIMITS,
 } from '../shared/contracts/index.js';
 import { Repository } from './repository.js';
 import { BackendError } from './errors.js';
+import type { AnalysisService } from './analysis/service.js';
+import type { OriginalStorage } from './storage.js';
+import { uploadMultipart } from './upload.js';
 
 type Request = { method: string; url: string; headers: Record<string, string | undefined>; body?: unknown };
 export type ApiResponse = { status: number; headers: Record<string, string>; body: unknown };
-export function createApi(repository: Repository, writeToken: string) {
+export interface ApiOptions { analysis?: AnalysisService; storage?: OriginalStorage; reviewerId?: string }
+export function createApi(repository: Repository, writeToken: string, options: ApiOptions = {}) {
   if (writeToken.length < 32) throw new Error('RIA_WRITE_TOKEN must contain at least 32 characters');
   const matches = (template: string, path: string, name: string): string | null => {
     const prefix = template.slice(0, template.indexOf(`:${name}`));
@@ -45,7 +50,30 @@ export function createApi(repository: Repository, writeToken: string) {
         const expected = Buffer.from(`Bearer ${writeToken}`);
         if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new BackendError('unauthorized', 'A valid backend write token is required.', 401);
       }
-      const json = (schema: z.ZodType, value: unknown, status = 200, headers: Record<string, string> = {}): ApiResponse => ({ status, body: schema.parse(value), headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
+      const json = (schema: z.ZodType, value: unknown, status = 200, headers: Record<string, string> = {}): ApiResponse => {
+        const result = schema.safeParse(value);
+        if (!result.success) throw new BackendError('internalError', 'Server response failed contract validation.', 500);
+        return { status, body: result.data, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } };
+      };
+      const acceptedComparison = (value: { jobId: string }) => json(API_CONTRACT.requestComparison.responses[202], value, 202, { Location: API_CONTRACT.readJob.path.replace(':jobId', value.jobId) });
+      if (request.method === API_CONTRACT.uploadDocument.method && path === API_CONTRACT.uploadDocument.path && options.storage) {
+        if (!Buffer.isBuffer(request.body)) throw new BackendError('validationError', 'Upload requires a multipart request body.', 400);
+        const accepted = await uploadMultipart(repository, options.storage, request.headers['content-type'] ?? '', request.body);
+        return json(API_CONTRACT.uploadDocument.responses[202], accepted, 202, { Location: API_CONTRACT.readJob.path.replace(':jobId', accepted.jobId) });
+      }
+      if (['POST', 'PATCH'].includes(request.method) && path !== API_CONTRACT.uploadDocument.path) {
+        if (url.search || request.headers['content-type']?.split(';')[0] !== 'application/json') throw new BackendError('validationError', 'Use application/json without query parameters.', 400);
+        const sourceId = matches(API_CONTRACT.updateSource.path, path, 'sourceId');
+        if (request.method === API_CONTRACT.updateSource.method && sourceId) return json(API_CONTRACT.updateSource.responses[200], repository.updateSource(IdSchema.parse(sourceId), request.body));
+        if (options.analysis) {
+          const compareId = matches(API_CONTRACT.requestComparison.path, path, 'publicationId');
+          if (request.method === API_CONTRACT.requestComparison.method && compareId) return acceptedComparison(options.analysis.requestComparison(IdSchema.parse(compareId), request.body));
+          const linkId = matches(API_CONTRACT.linkPredecessor.path, path, 'publicationId');
+          if (request.method === API_CONTRACT.linkPredecessor.method && linkId) return acceptedComparison(options.analysis.linkPredecessor(IdSchema.parse(linkId), request.body));
+          const reviewId = matches(API_CONTRACT.updateReview.path, path, 'publicationId');
+          if (request.method === API_CONTRACT.updateReview.method && reviewId) return json(API_CONTRACT.updateReview.responses[200], options.analysis.updateReview(IdSchema.parse(reviewId), request.body, options.reviewerId));
+        }
+      }
       if (request.method === API_CONTRACT.listSources.method && path === API_CONTRACT.listSources.path) {
         const { page, pageSize } = parsePaginationSearchParams(url.searchParams);
         const all = repository.sources().map(s => s.config);
@@ -59,6 +87,13 @@ export function createApi(repository: Repository, writeToken: string) {
       }
       if (request.method === 'GET' && path === API_CONTRACT.searchPublications.path) return json(PublicationListResponseSchema, repository.listPublications(parsePublicationSearchParams(url.searchParams)));
       if (request.method === 'GET') {
+        if (options.analysis) {
+          const comparisonId = matches(API_CONTRACT.readComparison.path, path, 'comparisonId');
+          const obligationId = matches(API_CONTRACT.readObligations.path, path, 'publicationId');
+          if ((comparisonId || obligationId) && url.search) throw new BackendError('validationError', 'This endpoint does not accept query parameters.', 400);
+          if (comparisonId) return json(API_CONTRACT.readComparison.responses[200], options.analysis.comparison(IdSchema.parse(comparisonId)));
+          if (obligationId) return json(API_CONTRACT.readObligations.responses[200], options.analysis.obligations(IdSchema.parse(obligationId)));
+        }
         const jobId = matches(API_CONTRACT.readJob.path, path, 'jobId');
         const monitorId = matches(API_CONTRACT.readMonitorResult.path, path, 'jobId');
         const publicationId = matches(API_CONTRACT.readPublication.path, path, 'publicationId');
@@ -78,8 +113,8 @@ export function createApi(repository: Repository, writeToken: string) {
   };
   return { handle, failure };
 }
-export function createHttpServer(repository: Repository, writeToken: string) {
-  const api = createApi(repository, writeToken);
+export function createHttpServer(repository: Repository, writeToken: string, options: ApiOptions = {}) {
+  const api = createApi(repository, writeToken, options);
   const server = createServer(async (req, res) => {
     try {
       const chunks: Buffer[] = [];
@@ -87,11 +122,13 @@ export function createHttpServer(repository: Repository, writeToken: string) {
       for await (const part of req) {
         const bytes = Buffer.from(part);
         size += bytes.length;
-        if (size > 16 * 1024) throw new BackendError('validationError', 'JSON request body exceeds 16 KiB.', 400);
+        const isUpload = req.method === 'POST' && req.url === API_CONTRACT.uploadDocument.path;
+        if (size > (isUpload ? UPLOAD_LIMITS.maxRequestBytes : 16 * 1024)) throw new BackendError(isUpload ? 'payloadTooLarge' : 'validationError', isUpload ? 'Upload request exceeds 21 MiB.' : 'JSON request body exceeds 16 KiB.', isUpload ? 413 : 400);
         chunks.push(bytes);
       }
       let body: unknown;
-      if (size) {
+      if (req.method === 'POST' && req.url === API_CONTRACT.uploadDocument.path) body = Buffer.concat(chunks);
+      else if (size) {
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; }
         catch { throw new BackendError('validationError', 'Malformed JSON.', 400); }
       }

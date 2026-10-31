@@ -14,6 +14,7 @@ export class Worker {
     private fetcherFactory: (hosts: readonly string[]) => OfficialFetcher = hosts => new HttpsOfficialFetcher(hosts),
     private retryBaseMs = 1000,
     private leaseMs = 60_000,
+    private afterTextExtraction?: (versionId: string) => void,
   ) {}
   async runOne(): Promise<boolean> {
     const job = this.repository.claim(this.leaseMs);
@@ -90,5 +91,6 @@ export class Worker {
     const mediaType = (JSON.parse(version.metadata_json) as { mediaType: string }).mediaType;
     const extracted = await extractText(this.storage.path(version.original_key), mediaType, signal);
     this.repository.completeExtraction(job, extracted, null);
+    this.afterTextExtraction?.(version.id);
   }
 }

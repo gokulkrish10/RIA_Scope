@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   DiscoveredPublicationSchema, DocumentVersionSchema, JobStatusSchema, MonitorRequestSchema,
   PublicationDetailSchema, PublicationSummarySchema, SourceConfigSchema,
+  ComparisonSchema, SourceUpdateRequestSchema, UploadMetadataSchema, UploadFileDescriptorSchema,
   type SourceConfig, type JobStatus, type PublicationSearchQuery, type ErrorInfo, type MonitorRunResult,
 } from '../shared/contracts/index.js';
 import { Database } from './db.js';
@@ -73,7 +74,8 @@ export class Repository {
     return row;
   }
   job(id: string): JobStatus {
-    const row = this.jobRow(id);
+    const row = this.db.get<JobRow>('SELECT * FROM jobs WHERE id=?', id) ?? this.db.get<JobRow>('SELECT * FROM analysis_jobs WHERE id=?', id);
+    if (!row) throw new BackendError('notFound', 'Job not found.', 404);
     return JobStatusSchema.parse({ id, kind: row.kind, state: row.state, createdAt: row.created_at, startedAt: row.started_at, completedAt: row.completed_at, error: row.error_json ? JSON.parse(row.error_json) : null, result: row.result_json ? JSON.parse(row.result_json) : null });
   }
   claim(leaseMs: number): JobRow | undefined {
@@ -230,14 +232,28 @@ export class Repository {
   detail(id: string, versionId?: string) {
     const row = this.db.get<PublicationRow>('SELECT * FROM publications WHERE id=?', id);
     if (!row) throw new BackendError('notFound', 'Publication not found.', 404);
-    const versions = this.db.all<VersionRow>('SELECT * FROM document_versions WHERE publication_id=? ORDER BY version_number', id).map(v => DocumentVersionSchema.parse(JSON.parse(v.metadata_json)));
+    const analyses = this.db.all<{ version_id: string; state: string; public_json: string | null; error_json: string | null }>('SELECT a.* FROM version_analysis a JOIN document_versions v ON v.id=a.version_id WHERE v.publication_id=?', id);
+    const versions = this.db.all<VersionRow>('SELECT * FROM document_versions WHERE publication_id=? ORDER BY version_number', id).map(v => {
+      const metadata = DocumentVersionSchema.parse(JSON.parse(v.metadata_json));
+      const analysis = analyses.find(a => a.version_id === v.id);
+      if (!analysis || analysis.state === 'succeeded') return metadata;
+      return DocumentVersionSchema.parse({ ...metadata, processingState: analysis.state, processingError: analysis.error_json ? JSON.parse(analysis.error_json) : null, extractedAt: null });
+    });
     const currentVersionId = versionId ?? row.current_version_id;
     const current = versions.find(v => v.id === currentVersionId)!;
+    const analysis = analyses.find(a => a.version_id === currentVersionId);
+    const structured = analysis?.state === 'succeeded' && analysis.public_json ? JSON.parse(analysis.public_json) as Partial<import('../shared/contracts/index.js').PublicationDetail> : {};
+    const latestRow = this.db.get<{ result_json: string }>('SELECT result_json FROM comparisons WHERE current_version_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1', currentVersionId);
+    const latest = latestRow ? ComparisonSchema.parse(JSON.parse(latestRow.result_json)) : null;
+    const raw = JSON.parse(row.discovery_json) as Record<string, unknown>;
+    const changes = latest?.state === 'succeeded' && ['resolved', 'notRequired'].includes(structured.relationshipState ?? '') ? [...new Set(latest.changes.map(c => c.classification))] : [];
     return PublicationDetailSchema.parse({
-      ...JSON.parse(row.discovery_json), documentId: row.document_id, currentVersionId,
+      ...raw, documentId: row.document_id, currentVersionId,
       businessAreas: [], processingState: current.processingState, processingError: current.processingError,
-      review: JSON.parse(row.review_json), relationshipState: 'unchecked', changeClasses: [], latestComparisonId: null,
+      review: JSON.parse(row.review_json), relationshipState: 'unchecked',
       updatedAt: row.updated_at, summary: null, versions, obligations: [], references: [],
+      ...structured, effectiveDate: raw.effectiveDate ?? structured.effectiveDate ?? null,
+      changeClasses: changes, latestComparisonId: latest?.id ?? null,
     });
   }
   listPublications(query: PublicationSearchQuery) {
@@ -248,20 +264,51 @@ export class Repository {
       const filter = (column: string, entries: string[] | undefined) => { if (entries) { conditions.push(`${column} IN (${entries.map(() => '?').join(',')})`); values.push(...entries); } };
       filter("json_extract(p.discovery_json,'$.country')", query.country);
       filter("json_extract(p.discovery_json,'$.regulatorId')", query.regulatorId);
-      filter("json_extract(v.metadata_json,'$.processingState')", query.processingState ? [query.processingState] : undefined);
+      filter("coalesce(a.state,json_extract(v.metadata_json,'$.processingState'))", query.processingState ? [query.processingState] : undefined);
       filter("json_extract(p.review_json,'$.state')", query.reviewState ? [query.reviewState] : undefined);
-      if (query.relationshipState && query.relationshipState !== 'unchecked' || query.businessArea || query.changeClass) conditions.push('0=1');
+      if (query.relationshipState) { conditions.push("(CASE WHEN a.state='succeeded' THEN json_extract(a.public_json,'$.relationshipState') ELSE 'unchecked' END)=?"); values.push(query.relationshipState); }
+      if (query.businessArea) { conditions.push(`a.state='succeeded' AND EXISTS (SELECT 1 FROM json_each(a.public_json,'$.businessAreas') WHERE value IN (${query.businessArea.map(() => '?').join(',')}))`); values.push(...query.businessArea); }
+      if (query.changeClass) { conditions.push(`a.state='succeeded' AND json_extract(a.public_json,'$.relationshipState') IN ('resolved','notRequired') AND json_extract(c.result_json,'$.state')='succeeded' AND EXISTS (SELECT 1 FROM json_each(c.result_json,'$.changes') WHERE json_extract(value,'$.classification') IN (${query.changeClass.map(() => '?').join(',')}))`); values.push(...query.changeClass); }
       if (query.publicationDateFrom) { conditions.push("substr(json_extract(p.discovery_json,'$.publicationDate'),1,10)>=?"); values.push(query.publicationDateFrom); }
       if (query.publicationDateTo) { conditions.push("substr(json_extract(p.discovery_json,'$.publicationDate'),1,10)<=?"); values.push(query.publicationDateTo); }
       if (query.q) {
         conditions.push("(instr(lower(json_extract(p.discovery_json,'$.title')),lower(?))>0 OR instr(lower(coalesce(json_extract(p.discovery_json,'$.referenceNumber'),'')),lower(?))>0 OR instr(lower(coalesce(v.extracted_text,'')),lower(?))>0)");
         values.push(query.q, query.q, query.q);
       }
-      const from = `FROM publications p JOIN document_versions v ON v.id=p.current_version_id ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''}`;
+      const from = `FROM publications p JOIN document_versions v ON v.id=p.current_version_id LEFT JOIN version_analysis a ON a.version_id=v.id LEFT JOIN comparisons c ON c.id=(SELECT c2.id FROM comparisons c2 WHERE c2.current_version_id=v.id ORDER BY c2.created_at DESC,c2.rowid DESC LIMIT 1) ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''}`;
       const total = this.db.get<{ n: number }>(`SELECT count(*) AS n ${from}`, ...values)!.n;
       const ids = this.db.all<{ id: string }>(`SELECT p.id ${from} ORDER BY json_extract(p.discovery_json,'$.discoveredAt') DESC,p.id ASC LIMIT ? OFFSET ?`, ...values, query.pageSize, (query.page - 1) * query.pageSize);
       const items = ids.map(({ id }) => { const { summary: _, versions: _v, obligations: _o, references: _r, ...summary } = this.detail(id); return PublicationSummarySchema.parse(summary); });
       return { items, page: query.page, pageSize: query.pageSize, total, hasNextPage: query.page * query.pageSize < total };
+    });
+  }
+  updateSource(id: string, input: unknown) {
+    const update = SourceUpdateRequestSchema.parse(input);
+    return this.db.transaction(() => {
+      const record = this.sourceById(id);
+      if (this.db.get('SELECT source_id FROM source_locks WHERE source_id=?', id)) throw new BackendError('conflict', 'Wait for the active source run before updating configuration.', 409);
+      if (update.url && new URL(update.url).origin !== new URL(record.config.url).origin) throw new BackendError('conflict', 'Source URL must remain on its configured official origin.', 409);
+      const enabled = update.enabled ?? record.config.enabled;
+      const next = SourceConfigSchema.parse({ ...record.config, ...update, nextMonitorAt: enabled ? new Date(this.clock() + (update.monitoringIntervalMinutes ?? record.config.monitoringIntervalMinutes) * 60_000).toISOString() : null, updatedAt: this.now() });
+      this.db.run('UPDATE sources SET config_json=? WHERE id=?', JSON.stringify(next), id);
+      return next;
+    });
+  }
+  upload(input: unknown, file: unknown, stored: { key: string; hash: string }) {
+    const metadata = UploadMetadataSchema.parse(input);
+    const descriptor = UploadFileDescriptorSchema.parse(file);
+    return this.db.transaction(() => {
+      const source = metadata.sourceId ? this.sourceById(metadata.sourceId) : this.sources().find(s => s.config.regulatorId === metadata.regulatorId && s.config.country === metadata.country);
+      if (!source) throw new BackendError('notFound', 'Regulator/source is not configured. Add the official catalog entry before uploading.', 404);
+      if (source.config.regulatorId !== metadata.regulatorId || source.config.country !== metadata.country) throw new BackendError('conflict', 'Country/regulator must match the configured source.', 409);
+      if (this.db.get('SELECT v.id FROM document_versions v JOIN publications p ON p.id=v.publication_id WHERE p.source_id=? AND v.content_hash=?', source.config.id, stored.hash)) throw new BackendError('conflict', 'This content is already catalogued for the source. Use the stored publication/version.', 409);
+      const publicationId = randomUUID(), documentId = randomUUID(), versionId = randomUUID(), now = this.now();
+      const discovery = DiscoveredPublicationSchema.parse({ id: publicationId, sourceId: metadata.sourceId, title: metadata.title, country: metadata.country, regulatorId: metadata.regulatorId, regulatorName: source.config.regulatorName, kind: metadata.kind, referenceNumber: metadata.referenceNumber, publicationDate: metadata.publicationDate, effectiveDate: metadata.effectiveDate, discoveredAt: now, sourceUrl: null });
+      this.db.run('INSERT INTO publications(id,source_id,canonical_key,document_id,current_version_id,discovery_json,review_json,updated_at) VALUES (?,?,?,?,?,?,?,?)', publicationId, source.config.id, `upload:${stored.hash}`, documentId, versionId, JSON.stringify(discovery), JSON.stringify({ state: 'pending', note: null, reviewedBy: null, updatedAt: now }), now);
+      const version = DocumentVersionSchema.parse({ id: versionId, documentId, publicationId, versionNumber: 1, ...descriptor, ingestionMethod: 'upload', sourceUrl: null, createdAt: now, extractedAt: null, processingState: 'queued', processingError: null });
+      this.db.run('INSERT INTO document_versions(id,publication_id,version_number,content_hash,original_key,metadata_json) VALUES (?,?,1,?,?,?)', versionId, publicationId, stored.hash, stored.key, JSON.stringify(version));
+      const jobId = this.enqueueIngestion(versionId);
+      return { jobId, publicationId, documentId, versionId, state: 'queued' as const };
     });
   }
 }

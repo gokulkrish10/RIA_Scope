@@ -205,7 +205,7 @@ test('queued work survives closing and reopening the database', async () => {
     while (await worker.runOne()) { /* drain restored queue */ }
     assert.equal(restored.job(accepted.jobId).state, 'succeeded');
     assert.equal(second.get<{ n: number }>('SELECT count(*) AS n FROM publications')?.n, 1);
-    assert.equal(second.get<{ n: number }>('SELECT count(*) AS n FROM schema_migrations')?.n, 1);
+    assert.equal(second.get<{ n: number }>('SELECT count(*) AS n FROM schema_migrations')?.n, 3);
   } finally { second.close(); await rm(root, { recursive: true, force: true }); }
 });
 test('mixed source success/failure produces an explicit partial result', async () => {
