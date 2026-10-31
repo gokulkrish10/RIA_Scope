@@ -39,7 +39,7 @@ const address = server.address();
 assert.ok(address && typeof address !== 'string');
 const base = `http://127.0.0.1:${address.port}`;
 const request = async (path: string, body?: unknown) => {
-  const response = await fetch(base + path, body === undefined ? {} : { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const response = await fetch(base + path, body === undefined ? { headers: { Authorization: `Bearer ${token}` } } : { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const value: unknown = await response.json();
   assert.ok(response.ok, JSON.stringify(value));
   return value;

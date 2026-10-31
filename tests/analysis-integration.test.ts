@@ -184,11 +184,17 @@ test('expired analysis leases are reclaimed and stale worker output is fenced', 
     assert.equal(h.db.get<{ n: number }>('SELECT count(*) AS n FROM analysis_chunks')!.n, 1);
   } finally { await h.cleanup(); }
 });
-test('every new write operation rejects unauthenticated requests', async () => {
+test('all direct read and write operations reject unauthenticated requests', async () => {
   const h = await setup();
   try {
     const id = randomUUID();
     for (const [method, url] of [
+      ['GET', '/api/v1/sources'],
+      ['GET', '/api/v1/publications'],
+      ['GET', `/api/v1/publications/${id}`],
+      ['GET', `/api/v1/publications/${id}/obligations`],
+      ['GET', `/api/v1/jobs/${id}`],
+      ['GET', `/api/v1/comparisons/${id}`],
       ['PATCH', `/api/v1/sources/${h.source.id}`],
       ['POST', '/api/v1/publications/upload'],
       ['POST', `/api/v1/publications/${id}/comparisons`],

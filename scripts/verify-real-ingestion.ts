@@ -28,19 +28,19 @@ async function cycle() {
   const response = await fetch(`${base}${API_CONTRACT.triggerMonitor.path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceIds: [CBK_SOURCE_ID] }) });
   assert.equal(response.status, 202);
   const accepted = MonitorAcceptedResponseSchema.parse(await response.json());
-  const queued = JobStatusSchema.parse(await (await fetch(`${base}/api/v1/jobs/${accepted.jobId}`)).json());
+  const queued = JobStatusSchema.parse(await (await fetch(`${base}/api/v1/jobs/${accepted.jobId}`, { headers: { Authorization: `Bearer ${token}` } })).json());
   assert.equal(queued.state, 'queued');
   for (let i = 0; i < 20 && await worker.runOne(); i++) { /* drain this small checkpoint queue */ }
-  const job = JobStatusSchema.parse(await (await fetch(`${base}/api/v1/jobs/${accepted.jobId}`)).json());
+  const job = JobStatusSchema.parse(await (await fetch(`${base}/api/v1/jobs/${accepted.jobId}`, { headers: { Authorization: `Bearer ${token}` } })).json());
   assert.equal(job.state, 'succeeded', JSON.stringify(job.error));
-  return MonitorRunResultSchema.parse(await (await fetch(`${base}/api/v1/monitor-runs/${accepted.jobId}/result`)).json());
+  return MonitorRunResultSchema.parse(await (await fetch(`${base}/api/v1/monitor-runs/${accepted.jobId}/result`, { headers: { Authorization: `Bearer ${token}` } })).json());
 }
 try {
   console.log('Verifying official CBK listing and its LIBOR guidance through real HTTP endpoints...');
   const first = await cycle();
-  const page = PublicationListResponseSchema.parse(await (await fetch(`${base}/api/v1/publications`)).json());
+  const page = PublicationListResponseSchema.parse(await (await fetch(`${base}/api/v1/publications`, { headers: { Authorization: `Bearer ${token}` } })).json());
   assert.equal(page.total, 1);
-  const publication = PublicationDetailSchema.parse(await (await fetch(`${base}/api/v1/publications/${page.items[0]!.id}`)).json());
+  const publication = PublicationDetailSchema.parse(await (await fetch(`${base}/api/v1/publications/${page.items[0]!.id}`, { headers: { Authorization: `Bearer ${token}` } })).json());
   assert.equal(publication.processingState, 'succeeded', JSON.stringify(publication.processingError));
   const before = db.get<{ versions: number; jobs: number }>('SELECT (SELECT count(*) FROM document_versions) AS versions,(SELECT count(*) FROM ingestion_tasks) AS jobs')!;
   const second = await cycle();

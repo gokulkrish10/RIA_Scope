@@ -1,6 +1,6 @@
 # Regulatory Change Impact Agent — Level 1 API contract
 
-Contract version: **1.0.0** (`CONTRACT_VERSION`). All endpoints below are **planned**, not implemented. The repository contains no HTTP server. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
+Contract version: **1.0.0** (`CONTRACT_VERSION`). These schemas originated in the shared foundation. The endpoints are now implemented locally; see [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for verified coverage and limitations. Direct reads and writes require the trusted server bearer token; browsers authenticate to the local gateway, which injects that token server-side. The authoritative executable definition is `src/shared/contracts/index.ts`; `API_CONTRACT` exports methods, paths, parameter/request schemas and status-to-response schemas. Never maintain separate interface copies in the frontend or backend.
 
 ## Wire conventions
 

@@ -1,5 +1,7 @@
 # Backend ingestion checkpoint
 
+> Integration update: read [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for the current combined application, authorization, startup and verification. Earlier implementation-status claims below describe the named input checkpoint. Direct API reads now require the trusted server token; browser access goes through the authenticated local gateway.
+
 Historical checkpoint preserved in local commit `980b469ae0458096672deb4e76fef495c19f0e15`. The subsequent analysis journey, additional implemented routes and credential requirements are documented in [ANALYSIS_INTEGRATION.md](ANALYSIS_INTEGRATION.md). “Not implemented” statements below describe this original text-ingestion checkpoint, not current analysis functionality. With current code, set `RIA_ANALYSIS_ENABLED=false` for text-only operation without AWS credentials.
 
 Implemented on `feature/gokul-backend`, based on shared foundation `306f0c94998a5c14717f5abccf319b08c20c8f3c`. Shared schemas, types, fixtures, endpoint names and enum values remain unchanged. No frontend files, Bedrock integration or second application backend were added. Sethu confirmed through Gokul that her adapter work has not started; there were no existing adapters to overwrite.

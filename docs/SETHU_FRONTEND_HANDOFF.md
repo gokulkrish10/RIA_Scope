@@ -1,5 +1,7 @@
 # Sethu Level 1 frontend handoff
 
+> Integration update: read [LEVEL1_INTEGRATION.md](LEVEL1_INTEGRATION.md) for the current combined application, authorization, startup and verification. Earlier implementation-status claims below describe the named input checkpoint. Direct API reads now require the trusted server token; browser access goes through the authenticated local gateway.
+
 Branch: `feature/sethu` (pulled `origin/main`; already up to date). Changes are local and uncommitted. No push or deployment was performed. Shared contracts and fixtures are unchanged; no contract changes require coordination. The only added dependency is Vite (development build/preview tooling), with its lockfile. No prior screens existed in this checkout.
 
 ## Implemented screens

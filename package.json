@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Shared Level 1 contracts and a local regulatory ingestion backend.",
   "scripts": {
-    "dev": "vite",
+    "dev": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js preview --host 127.0.0.1",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:contracts": "node --import tsx --test tests/contracts.test.ts",
     "validate:fixtures": "node --import tsx scripts/validate-fixtures.ts",
@@ -21,7 +21,10 @@
     "backend:worker-once": "node --env-file-if-exists=.env --import tsx scripts/backend.ts worker-once",
     "backend:analyze": "node --env-file-if-exists=.env --import tsx scripts/backend.ts analyze",
     "verify:real-ingestion": "node --import tsx scripts/verify-real-ingestion.ts",
-    "verify:live-analysis": "node --env-file-if-exists=.env --import tsx scripts/verify-live-analysis.ts"
+    "verify:live-analysis": "node --env-file-if-exists=.env --import tsx scripts/verify-live-analysis.ts",
+    "verify:browser": "node --import tsx scripts/verify-browser.ts",
+    "verify:live-browser": "node --env-file-if-exists=.env --import tsx scripts/verify-live-browser.ts",
+    "verify:sources": "node --import tsx scripts/verify-source-readiness.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1160.0",
@@ -32,6 +35,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@types/node": "22.20.1",
     "tsx": "4.23.1",
     "typescript": "5.9.3",

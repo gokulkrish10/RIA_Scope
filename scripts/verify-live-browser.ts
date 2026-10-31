@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { chromium, expect } from '@playwright/test';
+import { createServer } from 'vite';
+import { Database } from '../src/backend/db.js';
+import { Repository } from '../src/backend/repository.js';
+import { OriginalStorage } from '../src/backend/storage.js';
+import { Worker } from '../src/backend/worker.js';
+import { AnalysisService } from '../src/backend/analysis/service.js';
+import { AnalysisEngine } from '../src/backend/analysis/engine.js';
+import { BedrockModel, bedrockSettings } from '../src/backend/analysis/bedrock.js';
+import { createHttpServer } from '../src/backend/api.js';
+import { frontendGateway } from '../src/backend/frontend-gateway.js';
+import { adapters, cbkSource, CBK_CHECKPOINT_OPTIONS } from '../src/backend/adapters/cbk.js';
+
+process.umask(0o077);
+bedrockSettings();
+const token = process.env.RIA_WRITE_TOKEN!;
+const user = process.env.RIA_FRONTEND_USER!, password = process.env.RIA_FRONTEND_PASSWORD!, reviewer = process.env.RIA_REVIEWER_ID!;
+assert.ok(reviewer && token && user && password, 'Configure private local operator and reviewer environment.');
+const root = resolve('.data', `live-browser-${Date.now()}`); await mkdir(root, { recursive: true, mode: 0o700 });
+const db = new Database(resolve(root, 'ria.sqlite')); const repository = new Repository(db);
+const source = cbkSource(repository.now()); repository.seedSource(source, 'cbk-circulars', CBK_CHECKPOINT_OPTIONS);
+const storage = new OriginalStorage(resolve(root, 'originals'));
+const model = new BedrockModel(); const analysis = new AnalysisService(repository, new AnalysisEngine(model), 0);
+const worker = new Worker(repository, storage, adapters, undefined, 1000, 60_000, id => { analysis.requestAnalysis(id); });
+const backend = createHttpServer(repository, token, { analysis, storage, reviewerId: reviewer });
+await new Promise<void>(done => backend.listen(0, '127.0.0.1', done)); const address = backend.address(); assert.ok(address && typeof address !== 'string');
+const gateway = frontendGateway({ ...process.env, RIA_API_ORIGIN: `http://127.0.0.1:${address.port}` });
+const vite = await createServer({ configFile: false, plugins: gateway.plugins, server: { host: '127.0.0.1', port: 4179, strictPort: true, proxy: gateway.proxy, fs: { deny: ['.env', '.env.*', '**/.data/**', '**/*.sqlite*', '**/.git/**'] } } }); await vite.listen();
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const context = await browser.newContext({ baseURL: 'http://127.0.0.1:4179', httpCredentials: { username: user, password } }); const page = await context.newPage();
+let stopped = false; const workerLoop = (async () => { while (!stopped) { if (!await worker.runOne() && !await analysis.runOne()) await new Promise(r => setTimeout(r, 100)); } })();
+const report: Record<string, unknown> = { inputKind: 'official-CBK-LIBOR-PDF', model: model.identity, sourceUrl: source.url, startedAt: new Date().toISOString(), result: 'running', scope: 'narrow existing source configuration, not general four-region discovery' };
+try {
+  await page.goto('/#sources'); await page.locator('[data-run]').click();
+  await expect.poll(() => db.get<{ state: string }>("SELECT state FROM jobs WHERE kind='monitor' ORDER BY rowid DESC LIMIT 1")?.state, { timeout: 120000, intervals: [2000] }).toMatch(/succeeded|failed/);
+  const monitor = db.get<{ id: string }>("SELECT id FROM jobs WHERE kind='monitor' ORDER BY rowid DESC LIMIT 1")!;
+  const job = repository.job(monitor.id); assert.equal(job.state, 'succeeded', JSON.stringify(job.error));
+  const publication = db.get<{ id: string }>('SELECT id FROM publications LIMIT 1')!; assert.ok(publication);
+  await page.goto('/#publication/' + publication.id);
+  await expect.poll(() => db.get<{ state: string }>('SELECT state FROM analysis_jobs ORDER BY rowid DESC LIMIT 1')?.state, { timeout: 360000, intervals: [2000] }).toMatch(/succeeded|failed/);
+  const status = db.get<{ id: string }>('SELECT id FROM analysis_jobs ORDER BY rowid DESC LIMIT 1')!;
+  const outcome = repository.job(status.id); assert.equal(outcome.state, 'succeeded', JSON.stringify(outcome.error));
+  await page.reload(); await expect(page.getByRole('heading', { name: /Structured obligations/ })).toBeVisible();
+  const detail = repository.detail(publication.id); assert.ok(detail.obligations.length > 0); assert.equal(await page.locator('.obligation').count(), detail.obligations.length);
+  await page.locator('#review-form [name=state]').selectOption('inReview');
+  await page.locator('#review-form [name=note]').fill('Integration verification only; substantive regulatory review remains pending.');
+  await page.getByRole('button', { name: 'Save review' }).click(); await expect(page.locator('.state-strip')).toContainText(/In Review/i);
+  await page.reload(); await expect(page.locator('.state-strip')).toContainText(/In Review/i);
+  await page.screenshot({ path: resolve(root, 'official-obligations.png'), fullPage: true });
+  await page.goto('/#sources'); await page.locator('[data-run]').click();
+  await expect.poll(() => db.get<{ n: number }>("SELECT count(*) n FROM jobs WHERE kind='monitor' AND state='succeeded'")!.n, { timeout: 120000 }).toBe(2);
+  assert.equal(db.get<{ n: number }>('SELECT count(*) n FROM publications')!.n, 1); assert.equal(db.get<{ n: number }>('SELECT count(*) n FROM document_versions')!.n, 1);
+  Object.assign(report, { result: 'passed', publicationId: detail.id, versionId: detail.currentVersionId, obligations: detail.obligations.length, citations: detail.obligations.reduce((n,o)=>n+o.evidence.length,0), review: repository.detail(detail.id).review.state, duplicateFreeRerun: true, document: db.get('SELECT content_hash,metadata_json FROM document_versions LIMIT 1') });
+} catch (error) { report.result = 'failed'; report.failure = error instanceof Error ? error.message : String(error); process.exitCode = 1; await page.screenshot({ path: resolve(root, 'failure.png'), fullPage: true }); }
+finally { stopped = true; await workerLoop; await browser.close(); await vite.close(); await new Promise<void>(done => backend.close(() => done())); db.close(); report.completedAt = new Date().toISOString(); await writeFile(resolve(root,'report.json'),JSON.stringify(report,null,2),{mode:0o600}); console.log(JSON.stringify({ ...report, artifacts: root },null,2)); }

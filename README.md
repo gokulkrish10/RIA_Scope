@@ -19,4 +19,4 @@ npm run check
 
 Fixtures are invented demonstration content, not regulatory advice or verified source configurations.
 
-See [Sethu frontend handoff](docs/SETHU_FRONTEND_HANDOFF.md) and the integration verification guide for the combined application.
+See [the current integration guide](docs/LEVEL1_INTEGRATION.md) for startup, credentials, browser verification and remaining blockers. The default frontend mode is Live API; synthetic fixtures remain explicitly labelled and separate. This is a verified integration checkpoint, not completed Level 1 coverage.

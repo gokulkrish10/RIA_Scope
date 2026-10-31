@@ -262,7 +262,7 @@ test('API enforces auth, accepted/job distinction, query validation and public s
     assert.equal(response.status, 202);
     const { jobId } = response.body as { jobId: string };
     assert.equal(response.headers.Location, `/api/v1/jobs/${jobId}`);
-    const read = async (url: string) => api.handle({ method: 'GET', url, headers: {} });
+    const read = async (url: string) => api.handle({ method: 'GET', url, headers: { authorization: `Bearer ${token}` } });
     assert.equal(JobStatusSchema.parse((await read(`/api/v1/jobs/${jobId}`)).body).state, 'queued');
     assert.equal((await read(`/api/v1/monitor-runs/${jobId}/result`)).status, 409);
     await h.drain();

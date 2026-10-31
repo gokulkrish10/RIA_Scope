@@ -45,7 +45,9 @@ export function createApi(repository: Repository, writeToken: string, options: A
     try {
       const url = new URL(request.url, 'http://localhost');
       const path = url.pathname;
-      if (!['GET', 'HEAD'].includes(request.method)) {
+      // The same trusted server credential protects direct reads and writes.
+      // Browsers authenticate to the local gateway; it injects this token server-side.
+      {
         const actual = Buffer.from(request.headers.authorization ?? '');
         const expected = Buffer.from(`Bearer ${writeToken}`);
         if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new BackendError('unauthorized', 'A valid backend write token is required.', 401);
